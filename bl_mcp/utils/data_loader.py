@@ -1,11 +1,67 @@
 """Data loading utilities for Black-Litterman MCP server."""
 
+import tarfile
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 import yfinance as yf
+
+
+def ensure_data_available(data_dir: str = "data") -> None:
+    """
+    Ensure data is available by downloading from GitHub Release if needed.
+    
+    This function checks if data files exist, and if not, automatically downloads
+    the pre-packaged data from GitHub Release. This enables zero-configuration
+    setup for MCP server users.
+    
+    Args:
+        data_dir: Directory to store data files
+        
+    Note:
+        Downloads ~49MB data.tar.gz from GitHub Release on first run.
+        Data is cached locally for subsequent runs.
+    """
+    data_path = Path(data_dir)
+    
+    # Check if data directory exists and has parquet files
+    if data_path.exists() and list(data_path.glob("*.parquet")):
+        return  # Data already available
+    
+    print("📥 First run detected. Downloading data from GitHub Release...")
+    print("   This is a one-time download (~49MB, 503 stock files)...")
+    
+    # Create data directory
+    data_path.mkdir(parents=True, exist_ok=True)
+    
+    # GitHub Release URL
+    release_url = "https://github.com/irresi/bl-view-mcp/releases/download/data-v1.0/data.tar.gz"
+    tar_path = "data.tar.gz"
+    
+    try:
+        # Download tar.gz file
+        print(f"   Downloading from {release_url}...")
+        urllib.request.urlretrieve(release_url, tar_path)
+        
+        # Extract tar.gz
+        print("   Extracting files...")
+        with tarfile.open(tar_path, "r:gz") as tar:
+            tar.extractall(".")
+        
+        # Clean up tar file
+        Path(tar_path).unlink()
+        
+        # Verify download
+        file_count = len(list(data_path.glob("*.parquet")))
+        print(f"✅ Successfully downloaded {file_count} data files!")
+        
+    except Exception as e:
+        print(f"❌ Error downloading data: {e}")
+        print("   Please run 'make download-data' manually or check your internet connection.")
+        raise
 
 
 def load_prices(
@@ -17,6 +73,8 @@ def load_prices(
     """
     Load price data from Parquet files.
     
+    Automatically downloads data from GitHub Release on first run if not available.
+    
     Args:
         tickers: List of ticker symbols
         start_date: Start date (YYYY-MM-DD)
@@ -27,9 +85,12 @@ def load_prices(
         DataFrame with tickers as columns and dates as index
         
     Raises:
-        FileNotFoundError: If data file doesn't exist
+        FileNotFoundError: If data file doesn't exist after download attempt
         ValueError: If no data available for date range
     """
+    # Ensure data is available (auto-download on first run)
+    ensure_data_available(data_dir)
+    
     data_path = Path(data_dir)
     all_prices = {}
     

@@ -7,6 +7,20 @@
 
 ## 최근 변경사항
 
+### MCP 서버 배포 준비 완료 (2025-11-21) 🚀
+
+#### 1. **자동 데이터 다운로드** (MCP 사용자 지원)
+   - ✅ `ensure_data_available()` 함수 추가
+   - ✅ GitHub Release에서 자동 다운로드
+   - ✅ 첫 실행 시 자동으로 data.tar.gz (49MB, 503개 종목) 다운로드
+   - ✅ 로컬 캐싱 (이후 실행은 캐시 사용)
+   - ✅ **MCP 서버 사용자가 수동 설정 없이 바로 사용 가능**
+
+#### 2. **Public Repository 전환**
+   - ✅ GitHub Repository Public 공개
+   - ✅ GitHub Release 공개 접근 가능
+   - ✅ MCP Server Registry/Marketplace 배포 준비 완료
+
 ### 협업 인프라 완성 (2025-11-21) 🚀
 
 #### 1. **CONTRIBUTING.md 작성**
@@ -319,6 +333,7 @@ AAPL이 6개월동안 30% 수익을 낼 것 같아 (확신도 0.3)
 3. ✅ Phase 1 완료 (MVP - 4개 도구)
 4. ✅ 협업 인프라 구축 (CONTRIBUTING.md, Docker, Makefile 통합)
 5. ✅ 데이터 공유 시스템 (GitHub Release)
+6. ✅ **MCP 서버 배포 준비 완료** (자동 데이터 다운로드)
 
 ### 단기 (이번 주)
 

@@ -23,15 +23,20 @@ make quickstart
 make install
 ```
 
-### 2단계: 데이터 다운로드
+### 2단계: 데이터 다운로드 (선택사항)
 
+**자동 다운로드**: 테스트나 서버 실행 시 데이터가 없으면 자동으로 GitHub Release에서 다운로드됩니다.
+
+**수동 다운로드** (선택):
 ```bash
-# 샘플 데이터 (3개 종목)
-make data
+# 옵션 A: 사전 패키징된 데이터 (빠름, 503개 종목)
+make download-data
 
-# 또는 더 많은 데이터 (5개 종목)
-make data-full
+# 옵션 B: 샘플 데이터만 (3개 종목)
+make sample
 ```
+
+**요구사항**: 옵션 A는 [GitHub CLI](https://cli.github.com/) 필요 (`brew install gh`)
 
 ### 3단계: 테스트
 
@@ -105,10 +110,10 @@ make clean-all
 
 ## 📚 다음 단계
 
-- **상세 테스트**: `tests/README.md`
-- **Web UI 가이드**: `tests/ADK_WEB_GUIDE.md`
-- **Windsurf 연동**: `WINDSURF_SETUP.md`
-- **전체 문서**: `README.md`
+- **기여 가이드**: [CONTRIBUTING.md](CONTRIBUTING.md)
+- **테스트 가이드**: [TESTING.md](TESTING.md)
+- **Windsurf 연동**: [WINDSURF_SETUP.md](WINDSURF_SETUP.md)
+- **전체 문서**: [README.md](README.md)
 
 ---
 
@@ -124,7 +129,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### "Data file not found"
 ```bash
-make data
+# 빠른 다운로드 (503개 종목)
+make download-data
+
+# 또는 샘플만 (3개 종목)
+make sample
 ```
 
 ### 서버 연결 실패

@@ -1,5 +1,5 @@
 # Black-Litterman Portfolio Optimization MCP Server
-
+![alt text](image.png)
 이 프로젝트는 **Black-Litterman 포트폴리오 최적화**를 **Model Context Protocol (MCP)** 서버로 제공합니다.
 
 Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.
@@ -11,6 +11,62 @@ Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI
 - 🚀 **FastMCP** 서버 (stdio + HTTP)
 - 🧪 **3가지 테스트 방법** (Direct, Agent, Web UI)
 - 📦 **자동 데이터 다운로드** (yfinance → Parquet)
+
+---
+
+## 🚀 Quick Start
+
+### 1. 설치
+
+```bash
+git clone https://github.com/irresi/bl-view-mcp.git
+cd bl-view-mcp
+make install
+```
+
+### 2. 데이터 다운로드 (자동)
+
+**첫 실행 시 자동으로 다운로드됩니다!** 데이터가 없으면 GitHub Release에서 자동으로 503개 종목 데이터를 다운로드합니다.
+
+**수동 다운로드** (선택):
+```bash
+# 옵션 A: 사전 패키징된 데이터 (빠름, 503개 종목, 49MB)
+make download-data
+
+# 옵션 B: 샘플 데이터만 (3개 종목)
+make sample
+```
+
+**요구사항**: 옵션 A는 [GitHub CLI](https://cli.github.com/) 필요 (`brew install gh`)
+
+### 3. 테스트
+
+```bash
+make test-simple
+```
+
+**예상 출력**:
+```
+✅ Success!
+📊 Portfolio Weights:
+  AAPL: 33.33%
+  MSFT: 33.33%
+  GOOGL: 33.33%
+```
+
+### 4. 서버 실행
+
+```bash
+# HTTP 모드 (ADK Agent, Web UI)
+make server-http
+
+# stdio 모드 (Windsurf, Claude Desktop)
+make server-stdio
+```
+
+📚 **상세 가이드**: [QUICKSTART.md](QUICKSTART.md) | [CONTRIBUTING.md](CONTRIBUTING.md)
+
+---
 
 ## 목표
 

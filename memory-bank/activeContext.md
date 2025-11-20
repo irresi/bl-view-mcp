@@ -2,52 +2,89 @@
 
 ## 현재 상태
 
-**날짜**: 2025-11-20
-**Phase**: Phase 1 시작 전 (준비 단계)
-**초점**: Memory Bank 초기화 및 구현 계획 수립
+**날짜**: 2025-11-21
+**Phase**: Phase 1 완료 ✅ 
+**초점**: Web UI 테스트 및 검증
 
 ## 최근 변경사항
 
-### 2025-11-20
+### 2025-11-21 🎉 **Phase 1 완료!**
+
+#### 1. **핵심 구현 완료**
+   - ✅ `pyproject.toml`: 의존성 관리 (fastmcp, PyPortfolioOpt, pandas, numpy, yfinance, pyarrow, scikit-learn, google-adk)
+   - ✅ `bl_mcp/server.py`: FastMCP 서버 (@mcp.tool 데코레이터)
+   - ✅ `bl_mcp/tools.py`: 4개 MCP Tools 구현
+     - calculate_expected_returns
+     - calculate_covariance_matrix
+     - create_investor_view
+     - optimize_portfolio_bl (Black-Litterman 핵심)
+   - ✅ `bl_mcp/utils/data_loader.py`: Parquet 데이터 로딩
+   - ✅ `bl_mcp/utils/validators.py`: 입력 검증
+
+#### 2. **ADK Agent 구현**
+   - ✅ `bl_agent/agent.py`: Google ADK Agent 정의
+   - ✅ `bl_agent/prompt.py`: 한국어 프롬프트 (상세 instruction)
+   - ✅ MCPToolset 연동 (StreamableHTTPConnectionParams)
+
+#### 3. **데이터 파이프라인**
+   - ✅ `scripts/download_data.py`: yfinance → Parquet 자동 다운로드
+   - ✅ 증분 업데이트 지원 (get_last_date_from_parquet)
+   - ✅ curl-cffi 세션 지원 (rate limit 회피)
+   - ✅ 샘플 데이터 다운로드 완료 (AAPL, MSFT, GOOGL: 725 rows, 2023-2025)
+
+#### 4. **테스트 시스템**
+   - ✅ `tests/test_simple.py`: 직접 테스트 (모든 테스트 통과!)
+   - ✅ `tests/test_agent.py`: ADK Agent 통합 테스트
+   - ✅ `tests/README.md`: 테스트 가이드
+   - ✅ `tests/ADK_WEB_GUIDE.md`: Web UI 상세 가이드
+
+#### 5. **실행 스크립트**
+   - ✅ `start_stdio.py`: Windsurf/Claude Desktop용
+   - ✅ `start_http.py`: ADK Agent/Web UI용
+
+#### 6. **문서화 & 개발 도구**
+   - ✅ `TESTING.md`: 퀵스타트 가이드
+   - ✅ `QUICKSTART.md`: 5분 시작 가이드
+   - ✅ `Makefile`: 모든 작업 자동화
+   - ✅ `WINDSURF_SETUP.md`: Windsurf 연동 가이드
+
+#### 7. **Reference 정리**
+   - ✅ `reference/db대회/` 삭제 (1.1GB → 0)
+   - ✅ 핵심 기능만 추출 (scripts/download_data.py)
+
+### 2025-11-20 (Phase 0)
 
 1. **README.md 대폭 수정**
-   - ❌ 제거: mcp Python SDK, Claude Desktop 연동
-   - ✅ 추가: FastMCP 2.13.0.1, stdio/HTTP 듀얼 모드
-   - 프로젝트 구조 명시
-   - Phase 4 추가 (ADK Agent 통합)
-
 2. **Memory Bank 초기화**
-   - `projectbrief.md`: 프로젝트 목표 및 범위
-   - `productContext.md`: 사용자 경험, 시나리오
-   - `systemPatterns.md`: 아키텍처, 설계 패턴
-   - `techContext.md`: 기술 스택, 개발 환경
-   - `activeContext.md`: 현재 문서
-   - `progress.md`: 진행 상황 추적
-
-3. **Reference 자료 정리 및 최적화**
-   - `reference/` 폴더 생성
-   - `fastmcp/`, `PyPortfolioOpt/`, `9_AGENT_PROTOCOL/` 이동
-   - 불필요한 파일 제거 (693MB → 11.6MB, 98% 감소)
-     - `.git/` 제거 (35MB)
-     - `tests/` 제거 (4.3MB)
-     - `docs/` 제거 (9.5MB)
-     - `.venv/` 제거 (630MB)
-   - 핵심 파일만 유지:
-     - fastmcp: `src/`, `examples/`
-     - PyPortfolioOpt: `pypfopt/`, `cookbook/`
-     - 9_AGENT_PROTOCOL: 전체 샘플 프로젝트 (380KB)
-   - `reference/README.md` 작성 (상세 가이드)
-   - `.gitignore` 업데이트 (소스 코드만 제외, README는 Git 추적)
+3. **Reference 자료 정리** (693MB → 11.6MB)
 
 ## 현재 작업 초점
 
-### 우선순위 1: 프로젝트 구조 정리 ✅
+### 현재: Web UI 테스트 & 검증 🌐
 
-- [x] projectbrief.md 작성
-- [x] productContext.md 작성
-- [x] systemPatterns.md 작성
-- [x] techContext.md 작성
-- [x] activeContext.md 작성
+**실행 중인 서버**:
+- ✅ MCP Server: http://localhost:5000/mcp
+- ✅ ADK Web UI: http://localhost:8000
+
+**테스트 시나리오**:
+```
+AAPL, MSFT, GOOGL로 포트폴리오를 최적화해줘.
+2023년부터 데이터를 사용하고,
+AAPL이 10% 수익을 낼 것으로 예상해. 확신도는 70%야.
+```
+
+**예상 결과**:
+- Portfolio Weights: AAPL 30.71%, MSFT 34.64%, GOOGL 34.64%
+- Expected Return: 11.00%
+- Volatility: 21.69%
+- Sharpe Ratio: 0.51
+
+### 다음 단계 (Phase 2 준비)
+
+- [ ] Web UI 테스트 완료 후 스크린샷
+- [ ] Windsurf 연동 테스트
+- [ ] 성능 최적화 검토
+- [ ] 추가 Tools 구현 고려 (market_caps 실시간 조회 등)
 - [x] progress.md 작성
 - [x] Reference 자료 정리 (fastmcp, PyPortfolioOpt, 9_AGENT_PROTOCOL)
 

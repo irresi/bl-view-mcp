@@ -1,5 +1,16 @@
-
 # Black-Litterman Portfolio Optimization MCP Server
+
+이 프로젝트는 **Black-Litterman 포트폴리오 최적화**를 **Model Context Protocol (MCP)** 서버로 제공합니다.
+
+Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.
+
+## ✅ 구현 완료 (Phase 1)
+
+- 🎯 **4개 MCP Tools** 구현
+- 📊 **PyPortfolioOpt** 통합 (Idzorek 방법 포함)
+- 🚀 **FastMCP** 서버 (stdio + HTTP)
+- 🧪 **3가지 테스트 방법** (Direct, Agent, Web UI)
+- 📦 **자동 데이터 다운로드** (yfinance → Parquet)
 
 ## 목표
 
@@ -363,8 +374,6 @@ Rebalance quarterly.
 
 ## 프로젝트 구조
 
-```
-black-litterman-mcp/
 ├── pyproject.toml              # 프로젝트 설정 및 의존성
 ├── README.md
 ├── .env.example                # 환경 변수 템플릿

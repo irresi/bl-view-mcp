@@ -45,6 +45,22 @@ def load_prices(
         # Load Parquet file
         df = pd.read_parquet(file_path)
         
+        # Handle MultiIndex columns (from yfinance)
+        if isinstance(df.columns, pd.MultiIndex):
+            # Flatten: take only Close prices
+            df = df[('Close', ticker)] if ('Close', ticker) in df.columns else df['Close']
+        elif 'Close' in df.columns:
+            df = df['Close']
+        
+        # Set Date as index if it's a column
+        if 'Date' in df.index.names or df.index.name == 'Date':
+            pass  # Already has Date as index
+        elif hasattr(df, 'index') and isinstance(df.index, pd.DatetimeIndex):
+            pass  # Already DatetimeIndex
+        else:
+            df.index = pd.to_datetime(df.index)
+        
+        # Now df should be a Series with DatetimeIndex
         # Filter by date range
         df = df.loc[start_date:end_date] if end_date else df.loc[start_date:]
         
@@ -54,11 +70,15 @@ def load_prices(
                 f"{start_date} to {end_date or 'present'}"
             )
         
-        # Use Close prices
-        all_prices[ticker] = df["Close"]
+        # Store the Close price Series
+        all_prices[ticker] = df
     
-    # Combine into single DataFrame
+    # Combine into single DataFrame (pandas will align on index)
     prices_df = pd.DataFrame(all_prices)
+    
+    # Ensure we have DatetimeIndex
+    if not isinstance(prices_df.index, pd.DatetimeIndex):
+        prices_df.index = pd.to_datetime(prices_df.index)
     
     # Drop any rows with missing data
     prices_df = prices_df.dropna()

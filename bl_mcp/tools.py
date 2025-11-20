@@ -59,10 +59,12 @@ def calculate_expected_returns(
         }
     
     except Exception as e:
+        import traceback
         return {
             "success": False,
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
         }
 
 
@@ -118,10 +120,12 @@ def calculate_covariance_matrix(
         }
     
     except Exception as e:
+        import traceback
         return {
             "success": False,
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
         }
 
 
@@ -159,10 +163,12 @@ def create_investor_view(
         }
     
     except Exception as e:
+        import traceback
         return {
             "success": False,
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
         }
 
 
@@ -216,7 +222,8 @@ def optimize_portfolio_bl(
             # Use equal market caps if not provided
             market_caps = {ticker: 1.0 for ticker in tickers}
         
-        mcaps = pd.Series(market_caps)
+        # Convert to Series with explicit index
+        mcaps = pd.Series(market_caps, index=tickers)
         
         # Calculate risk aversion if not provided
         if risk_aversion is None:
@@ -239,21 +246,23 @@ def optimize_portfolio_bl(
                 omega="idzorek",  # Idzorek's confidence method!
                 view_confidences=[confidence] * len(views)
             )
+            # Get posterior returns
+            posterior_rets = bl.bl_returns()
+            # Get optimized weights
+            weights = bl.bl_weights()
+            # Calculate portfolio metrics
+            perf = bl.portfolio_performance(verbose=False)
         else:
-            # No views: just use market-implied returns
-            bl = BlackLittermanModel(
-                S,
-                pi=market_prior
-            )
-        
-        # Get posterior returns
-        posterior_rets = bl.bl_returns()
-        
-        # Get optimized weights
-        weights = bl.bl_weights()
-        
-        # Calculate portfolio metrics
-        perf = bl.portfolio_performance(verbose=False)
+            # No views: use market equilibrium weights directly
+            # Market cap weighted portfolio
+            weights = mcaps / mcaps.sum()
+            posterior_rets = market_prior
+            # Manual performance calculation for no-view case
+            portfolio_return = weights.dot(posterior_rets)
+            portfolio_variance = weights.dot(S).dot(weights)
+            portfolio_vol = portfolio_variance ** 0.5
+            sharpe = portfolio_return / portfolio_vol if portfolio_vol > 0 else 0
+            perf = (portfolio_return, portfolio_vol, sharpe)
         
         return {
             "success": True,
@@ -273,8 +282,10 @@ def optimize_portfolio_bl(
         }
     
     except Exception as e:
+        import traceback
         return {
             "success": False,
             "error": str(e),
-            "error_type": type(e).__name__
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
         }

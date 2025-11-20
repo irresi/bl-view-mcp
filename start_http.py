@@ -19,7 +19,9 @@ For ADK Web UI:
 
 from bl_mcp.server import mcp
 
-if __name__ == "__main__":
+
+def main():
+    """Main entry point for HTTP mode."""
     print("=" * 60)
     print("Black-Litterman MCP Server - HTTP Mode")
     print("=" * 60)
@@ -35,3 +37,7 @@ if __name__ == "__main__":
     print()
     
     mcp.run(transport="http", host="localhost", port=5000)
+
+
+if __name__ == "__main__":
+    main()

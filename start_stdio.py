@@ -2,6 +2,12 @@
 
 from bl_mcp.server import mcp
 
-if __name__ == "__main__":
+
+def main():
+    """Main entry point for stdio mode."""
     # Run in stdio mode for IDE integration (Windsurf, Claude Desktop)
     mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

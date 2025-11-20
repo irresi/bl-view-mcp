@@ -1,4 +1,4 @@
-.PHONY: help install sync test test-simple test-agent clean data server-http server-stdio web-ui all
+.PHONY: help install sync test test-simple test-agent clean sample data-snp500 download-data pack-data server-http server-stdio web-ui all
 
 # Default target
 help:
@@ -9,8 +9,10 @@ help:
 	@echo "  make sync         - Sync dependencies only"
 	@echo ""
 	@echo "Data:"
-	@echo "  make data         - Download sample data (AAPL, MSFT, GOOGL)"
-	@echo "  make data-full    - Download extended data (5 tickers)"
+	@echo "  make sample       - Download sample data (AAPL, MSFT, GOOGL)"
+	@echo "  make data-snp500  - Download S&P 500 data (503 tickers)"
+	@echo "  make download-data - Download pre-packaged data from GitHub"
+	@echo "  make pack-data    - Pack data folder for sharing (creates tar.gz)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test         - Run all tests"
@@ -40,15 +42,40 @@ sync:
 	@echo "✅ Sync complete!"
 
 # Data download
-data:
+sample:
 	@echo "📊 Downloading sample data (AAPL, MSFT, GOOGL)..."
 	uv run python scripts/download_data.py --tickers AAPL MSFT GOOGL --start 2023-01-01
-	@echo "✅ Data download complete!"
+	@echo "✅ Sample data download complete!"
 
-data-full:
-	@echo "📊 Downloading extended data..."
-	uv run python scripts/download_data.py --tickers AAPL MSFT GOOGL AMZN TSLA --start 2023-01-01
-	@echo "✅ Extended data download complete!"
+data-snp500:
+	@echo "📊 Downloading S&P 500 data (503 tickers)..."
+	uv run python scripts/download_sp500.py
+	@echo "✅ S&P 500 data download complete!"
+
+# Data sharing (temporary, will migrate to S3)
+download-data:
+	@echo "📥 Downloading pre-packaged data from GitHub..."
+	curl -L -o data.tar.gz https://github.com/irresi/bl-view-mcp/releases/download/data-v1.0/data.tar.gz
+	tar -xzf data.tar.gz
+	rm data.tar.gz
+	@echo "✅ Data download complete!"
+	@echo "📊 Downloaded $(shell ls data/*.parquet 2>/dev/null | wc -l | tr -d ' ') parquet files"
+
+pack-data:
+	@echo "📦 Packing data folder for sharing..."
+	@if [ ! -d "data" ] || [ -z "$$(ls -A data/ 2>/dev/null)" ]; then \
+		echo "❌ No data folder found. Run 'make sample' or 'make data-snp500' first."; \
+		exit 1; \
+	fi
+	tar -czf data.tar.gz data/
+	@echo "✅ Data packed: data.tar.gz"
+	@ls -lh data.tar.gz
+	@echo ""
+	@echo "📤 Next steps:"
+	@echo "  1. Go to: https://github.com/irresi/bl-view-mcp/releases/new"
+	@echo "  2. Create tag: data-v1.0 (or increment version)"
+	@echo "  3. Upload: data.tar.gz"
+	@echo "  4. Collaborators can run: make download-data"
 
 # Testing
 test: test-simple
@@ -66,6 +93,8 @@ test-agent:
 # Servers
 server-http:
 	@echo "🚀 Starting HTTP server on http://localhost:5000/mcp"
+	@echo "Checking for existing processes on port 5000..."
+	@lsof -ti:5000 | xargs kill -9 2>/dev/null || true
 	@echo "Press Ctrl+C to stop"
 	uv run python start_http.py
 
@@ -77,6 +106,8 @@ server-stdio:
 web-ui:
 	@echo "🌐 Starting ADK Web UI on http://localhost:8000"
 	@echo "⚠️  Make sure HTTP server is running (make server-http)"
+	@echo "Checking for existing processes on port 8000..."
+	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 	@echo "Press Ctrl+C to stop"
 	uv run adk web
 
@@ -90,7 +121,7 @@ dev:
 	@$(MAKE) server-http
 
 # Quickstart for new users
-quickstart: install data test-simple
+quickstart: install sample test-simple
 	@echo ""
 	@echo "✅ Quickstart complete!"
 	@echo ""
@@ -127,11 +158,11 @@ check:
 	@which uv && uv --version || echo "❌ UV not installed"
 	@echo ""
 	@echo "Data files:"
-	@ls -lh data/*.parquet 2>/dev/null || echo "❌ No data files found (run 'make data')"
+	@ls -lh data/*.parquet 2>/dev/null || echo "❌ No data files found (run 'make sample')"
 	@echo ""
 	@echo "Dependencies:"
 	@uv pip list | grep -E "(fastmcp|PyPortfolioOpt|google-adk)" || echo "❌ Dependencies not installed (run 'make install')"
 
 # Run everything (for CI/CD or full verification)
-all: install data test
+all: install sample test
 	@echo "✅ All tasks completed successfully!"

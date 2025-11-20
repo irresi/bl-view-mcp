@@ -55,11 +55,12 @@ data-snp500:
 # Data sharing (temporary, will migrate to S3)
 download-data:
 	@echo "📥 Downloading pre-packaged data from GitHub..."
-	curl -L -o data.tar.gz https://github.com/irresi/bl-view-mcp/releases/download/data-v1.0/data.tar.gz
+	@which gh >/dev/null 2>&1 || (echo "❌ GitHub CLI (gh) not installed. Run: brew install gh" && exit 1)
+	gh release download data-v1.0 -p "data.tar.gz" --clobber
 	tar -xzf data.tar.gz
 	rm data.tar.gz
 	@echo "✅ Data download complete!"
-	@echo "📊 Downloaded $(shell ls data/*.parquet 2>/dev/null | wc -l | tr -d ' ') parquet files"
+	@echo "📊 Downloaded $$(ls data/*.parquet 2>/dev/null | wc -l | tr -d ' ') parquet files"
 
 pack-data:
 	@echo "📦 Packing data folder for sharing..."

@@ -2,10 +2,52 @@
 
 ## 현재 상태
 
-**Phase**: Phase 1 완료 ✅ → **S&P 500 데이터 확장**
-**초점**: S&P 500 전체 데이터 다운로드 및 검증
+**Phase**: Phase 1 완료 ✅ → **개발 워크플로우 & 데이터 공유 최적화**
+**초점**: 협업 환경 개선 및 데이터 배포 시스템 구축
 
 ## 최근 변경사항
+
+### 개발 워크플로우 개선 (2025-11-21) 🛠️
+
+#### 1. **Makefile 개선**
+   - ✅ 포트 충돌 자동 해결
+     - `server-http`: 5000번 포트 사용 중인 프로세스 자동 kill
+     - `web-ui`: 8000번 포트 사용 중인 프로세스 자동 kill
+     - `lsof -ti:PORT | xargs kill -9` 패턴 적용
+   - ✅ 명령어 네이밍 개선
+     - `data` → `sample` (샘플 데이터 3개)
+     - `data-full` 제거 (불필요)
+     - `data-snp500` 추가 (S&P 500 전체 503개)
+   - ✅ `.PHONY` 정리 및 help 메시지 업데이트
+
+#### 2. **데이터 공유 시스템 구축**
+   - ✅ GitHub Release 기반 배포 (S3 이전 전 임시)
+     - `pack-data`: data 폴더 전체 압축 (data.tar.gz, 49MB)
+     - `download-data`: GitHub Release에서 다운로드
+     - GitHub CLI (`gh`) 사용으로 안정적 다운로드
+     - `--clobber` 옵션으로 덮어쓰기 지원
+   - ✅ Release 생성 완료
+     - Tag: `data-v1.0`
+     - 파일: `data.tar.gz` (48.51 MB)
+     - URL: https://github.com/irresi/bl-view-mcp/releases/tag/data-v1.0
+   - ✅ 다운로드 테스트 완료 (503개 파일 모두 복원)
+   - ✅ `.gitignore` 업데이트: `data.tar.gz` 추가
+
+#### 3. **협업 워크플로우**
+   - ✅ 데이터 제공자 (본인)
+     ```bash
+     make data-snp500  # 데이터 다운로드
+     make pack-data    # 압축
+     # GitHub Release 업로드 (자동)
+     ```
+   - ✅ 협업자 (팀원)
+     ```bash
+     make download-data  # 한 줄로 완료!
+     ```
+   - ✅ 장점
+     - ⚡ 빠름: 503개 개별 다운로드 → 1개 압축 파일
+     - 🔒 일관성: 모든 협업자가 동일한 데이터 사용
+     - 💾 압축: 49MB (yfinance 재다운로드 불필요)
 
 ### S&P 500 데이터 파이프라인 구축 🚀
 
@@ -225,31 +267,37 @@ AAPL이 6개월동안 30% 수익을 낼 것 같아 (확신도 0.3)
 
 ## 다음 단계
 
-### 즉시 (오늘)
+### 즉시 (완료됨)
 
 1. ✅ Memory Bank 완성 및 검토
 2. ✅ Reference 자료 정리 및 최적화 (693MB → 11.6MB)
-3. [ ] Phase 1 구현 시작
-   - `pyproject.toml` 작성
-   - 패키지 구조 생성
+3. ✅ Phase 1 완료 (MCP 서버 MVP)
+4. ✅ 개발 워크플로우 개선 (Makefile, 데이터 공유)
 
 ### 단기 (이번 주)
 
-1. **Phase 1 완료**
-   - Tools 로직 구현 (4개)
-   - FastMCP 서버 구현
-   - Windsurf 연동 테스트
+1. **데이터 공유 시스템 개선** (선택적)
+   - [ ] S3 버킷 생성 및 데이터 업로드
+   - [ ] Makefile에서 S3 다운로드로 전환
+   - [ ] GitHub Release는 fallback으로 유지
 
-2. **시나리오 1 검증**
-   - "AAPL, MSFT, GOOGL로 포트폴리오 최적화"
-   - 전체 워크플로우 작동 확인
+2. **Phase 2 준비**
+   - [ ] 백테스팅 요구사항 정의
+   - [ ] 추가 Tools 설계 (5-8번)
+   - [ ] 테스트 시나리오 작성
 
 ### 중기 (다음 주)
 
-1. **Phase 2 시작**
-   - 백테스팅 Tool
-   - 팩터 스코어링
-   - HRP 가중치
+1. **Phase 2 구현**
+   - [ ] Tool 5: `backtest_portfolio` - 백테스팅
+   - [ ] Tool 6: `get_market_data` - 시장 데이터 조회
+   - [ ] Tool 7: `calculate_factor_scores` - 팩터 스코어링
+   - [ ] Tool 8: `calculate_hrp_weights` - HRP 가중치
+
+2. **문서화 강화**
+   - [ ] README 업데이트 (데이터 공유 가이드)
+   - [ ] 사용 예제 추가
+   - [ ] API 문서 생성
 
 ## 현재 고려사항
 

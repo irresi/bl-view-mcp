@@ -57,6 +57,7 @@ data/*.parquet
 data/cache/
 *.csv
 *.xlsx
+data.tar.gz
 
 # Logs
 *.log
@@ -68,3 +69,6 @@ logs/
 
 # Distribution
 *.whl
+
+# Docker
+.docker/

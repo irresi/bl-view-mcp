@@ -51,9 +51,13 @@ tests/                # 테스트
 
 ### 1. 사전 요구사항
 
+**로컬 개발:**
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv) (권장) 또는 pip
 - Git
+
+**Docker 사용 (권장):**
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) 또는 Docker Engine
 
 ### 2. 저장소 클론
 
@@ -62,7 +66,37 @@ git clone https://github.com/irresi/bl-view-mcp.git
 cd bl-view-mcp
 ```
 
-### 3. 의존성 설치
+### 3. 개발 환경 선택
+
+#### 옵션 A: Docker 환경 (권장, 크로스 플랫폼) 🐳
+
+**장점:**
+- ✅ Windows/macOS/Linux 모두 동일한 환경
+- ✅ Python 설치 불필요
+- ✅ 의존성 자동 설치
+- ✅ 격리된 환경
+
+```bash
+# 1. Docker 환경 설정 (최초 1회)
+make docker-setup
+
+# 2. 컨테이너 접속
+make docker-shell
+
+# 3. 컨테이너 내에서 원하는 명령어 실행
+make server-http  # HTTP 서버 시작
+make test         # 테스트 실행
+make sample       # 데이터 다운로드
+# ... 모든 make 명령어 동일하게 작동
+```
+
+**정리:**
+```bash
+# Docker 환경 제거
+make docker-clean
+```
+
+#### 옵션 B: 로컬 개발 (Python 3.11+ 필요)
 
 ```bash
 # uv 사용 (권장)
@@ -72,8 +106,7 @@ make install
 uv sync --extra agent
 ```
 
-### 4. 환경 확인
-
+**환경 확인:**
 ```bash
 make check
 ```
@@ -81,6 +114,8 @@ make check
 ---
 
 ## 데이터 준비
+
+**참고**: Docker 사용 시 `./data` 폴더가 자동으로 컨테이너와 공유됩니다.
 
 ### 옵션 1: 미리 패키징된 데이터 다운로드 (빠름) ⚡
 
@@ -109,6 +144,10 @@ make data-snp500
 ---
 
 ## 개발 워크플로우
+
+**중요**: Docker 환경이든 로컬 환경이든 모든 명령어가 동일합니다!
+- Docker 사용 시: `make docker-shell`로 컨테이너 접속 후 사용
+- 로컬 사용 시: 바로 사용
 
 ### 서버 실행
 

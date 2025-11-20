@@ -1,4 +1,4 @@
-.PHONY: help install sync test test-simple test-agent clean sample data-snp500 download-data pack-data server-http server-stdio web-ui all
+.PHONY: help install sync test test-simple test-agent clean sample data-snp500 download-data pack-data server-http server-stdio web-ui dev all docker-setup docker-shell docker-clean
 
 # Default target
 help:
@@ -28,6 +28,14 @@ help:
 	@echo "  make dev          - Start both HTTP server and Web UI"
 	@echo "  make clean        - Clean generated files"
 	@echo "  make clean-all    - Clean everything including data"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-setup - Build and start Docker environment (one-time)"
+	@echo "  make docker-shell - Enter Docker container shell"
+	@echo "  make docker-clean - Stop and remove Docker containers"
+	@echo ""
+	@echo "Note: After 'make docker-setup', use standard commands (dev, test, etc.)"
+	@echo "      inside the container via 'make docker-shell'"
 	@echo ""
 
 # Installation
@@ -167,3 +175,35 @@ check:
 # Run everything (for CI/CD or full verification)
 all: install sample test
 	@echo "✅ All tasks completed successfully!"
+
+# Docker commands (environment setup only)
+docker-setup:
+	@echo "🐳 Setting up Docker environment..."
+	docker build -t bl-view-mcp .
+	@echo "✅ Docker image built!"
+	@echo ""
+	@echo "Starting development container..."
+	docker run -d \
+		--name bl-view-mcp-dev \
+		--network host \
+		-v $(PWD):/app \
+		-w /app \
+		bl-view-mcp tail -f /dev/null
+	@echo "✅ Docker environment ready!"
+	@echo ""
+	@echo "📝 Next steps:"
+	@echo "  1. Enter container: make docker-shell"
+	@echo "  2. Inside container, run: make server-http (or any make command)"
+	@echo ""
+
+docker-shell:
+	@echo "🐳 Entering Docker container..."
+	@echo "Run 'exit' to leave the container"
+	@docker exec -it bl-view-mcp-dev bash
+
+docker-clean:
+	@echo "🐳 Cleaning Docker environment..."
+	@docker stop bl-view-mcp-dev 2>/dev/null || true
+	@docker rm bl-view-mcp-dev 2>/dev/null || true
+	@docker rmi bl-view-mcp 2>/dev/null || true
+	@echo "✅ Docker containers and images removed!"

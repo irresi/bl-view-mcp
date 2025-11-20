@@ -2,10 +2,47 @@
 
 ## 현재 상태
 
-**Phase**: Phase 1 완료 ✅ → **개발 워크플로우 & 데이터 공유 최적화**
-**초점**: 협업 환경 개선 및 데이터 배포 시스템 구축
+**Phase**: Phase 1 완료 ✅ → **협업 인프라 구축 완료**
+**초점**: 크로스 플랫폼 개발 환경 및 기여자 가이드 완성
 
 ## 최근 변경사항
+
+### 협업 인프라 완성 (2025-11-21) 🚀
+
+#### 1. **CONTRIBUTING.md 작성**
+   - ✅ 프로젝트 구조 및 도구 설명
+   - ✅ 개발 환경 설정 가이드 (Docker/로컬)
+   - ✅ 데이터 준비 방법 (패키징/직접 다운로드)
+   - ✅ 개발 워크플로우 전체 문서화
+   - ✅ 테스트 가이드 및 예제
+   - ✅ 코드 스타일 및 PR 가이드라인
+   - ✅ 데이터 공유 워크플로우
+
+#### 2. **Docker 환경 구축** 🐳
+   - ✅ `Dockerfile`: Python 3.11 + uv (pip 설치)
+     - build-essential 포함 (gcc 등 빌드 도구)
+     - README.md 명시적 복사
+   - ✅ `.dockerignore`: 빌드 최적화
+     - reference/, memory-bank/ 제외
+     - 개별 문서 파일 제외 (README.md는 포함)
+   - ✅ 크로스 플랫폼 지원 (Windows/macOS/Linux)
+
+#### 3. **Makefile Docker 통합**
+   - ✅ **docker-compose.yml 제거** (불필요한 복잡성)
+   - ✅ Makefile에서 `docker run` 직접 사용
+   - ✅ **관심사 분리**:
+     - `docker-setup`: 환경 설정만 (이미지 빌드 + 컨테이너 생성)
+     - 서버 실행: 사용자가 컨테이너 내에서 `make server-http` 실행
+   - ✅ `--network host` 사용 (포트 충돌 없음)
+   - ✅ 전체 프로젝트 마운트 (`$(PWD):/app`)
+   - ✅ `docker-shell`: 컨테이너 접속
+   - ✅ `docker-clean`: 환경 제거
+
+#### 4. **개발 워크플로우 단순화**
+   - ✅ Docker: `make docker-setup` → `make docker-shell` → `make server-http`
+   - ✅ 로컬: 바로 `make server-http` 사용
+   - ✅ 일관성: 컨테이너 내외 모든 명령어 동일
+   - ✅ 단순성: 1개 파일 (Makefile), Docker Compose 불필요
 
 ### 개발 워크플로우 개선 (2025-11-21) 🛠️
 
@@ -31,9 +68,17 @@
      - 파일: `data.tar.gz` (48.51 MB)
      - URL: https://github.com/irresi/bl-view-mcp/releases/tag/data-v1.0
    - ✅ 다운로드 테스트 완료 (503개 파일 모두 복원)
-   - ✅ `.gitignore` 업데이트: `data.tar.gz` 추가
 
-#### 3. **협업 워크플로우**
+#### 3. **저장소 정리**
+   - ✅ GitHub 저장소 이름 변경
+     - 기존: `Black-Litterman-View-Generation`
+     - 신규: `bl-view-mcp` (간결하고 명확)
+   - ✅ git remote 업데이트
+     - `https://github.com/irresi/bl-view-mcp.git`
+   - ✅ `.gitignore` 업데이트
+     - `data.tar.gz` 추가
+
+#### 4. **협업 워크플로우**
    - ✅ 데이터 제공자 (본인)
      ```bash
      make data-snp500  # 데이터 다운로드
@@ -267,24 +312,25 @@ AAPL이 6개월동안 30% 수익을 낼 것 같아 (확신도 0.3)
 
 ## 다음 단계
 
-### 즉시 (완료됨)
+### 완료됨 ✅
 
 1. ✅ Memory Bank 완성 및 검토
 2. ✅ Reference 자료 정리 및 최적화 (693MB → 11.6MB)
-3. ✅ Phase 1 완료 (MCP 서버 MVP)
-4. ✅ 개발 워크플로우 개선 (Makefile, 데이터 공유)
+3. ✅ Phase 1 완료 (MVP - 4개 도구)
+4. ✅ 협업 인프라 구축 (CONTRIBUTING.md, Docker, Makefile 통합)
+5. ✅ 데이터 공유 시스템 (GitHub Release)
 
 ### 단기 (이번 주)
 
-1. **데이터 공유 시스템 개선** (선택적)
-   - [ ] S3 버킷 생성 및 데이터 업로드
-   - [ ] Makefile에서 S3 다운로드로 전환
-   - [ ] GitHub Release는 fallback으로 유지
-
-2. **Phase 2 준비**
+1. **Phase 2 준비**
    - [ ] 백테스팅 요구사항 정의
-   - [ ] 추가 Tools 설계 (5-8번)
+   - [ ] 추가 도구 설계 (5-8번)
    - [ ] 테스트 시나리오 작성
+
+2. **문서 개선 (선택)**
+   - [ ] README에 Docker 빠른 시작 추가
+   - [ ] QUICKSTART.md 업데이트
+   - [ ] 사용 예제 추가
 
 ### 중기 (다음 주)
 
@@ -294,10 +340,9 @@ AAPL이 6개월동안 30% 수익을 낼 것 같아 (확신도 0.3)
    - [ ] Tool 7: `calculate_factor_scores` - 팩터 스코어링
    - [ ] Tool 8: `calculate_hrp_weights` - HRP 가중치
 
-2. **문서화 강화**
-   - [ ] README 업데이트 (데이터 공유 가이드)
-   - [ ] 사용 예제 추가
-   - [ ] API 문서 생성
+2. **배포 준비**
+   - [ ] Docker Hub 이미지 퍼블리시
+   - [ ] 사용 예제 및 튜토리얼
 
 ## 현재 고려사항
 

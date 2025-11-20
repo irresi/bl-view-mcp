@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.pytest_cache
+.mypy_cache
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Data (선택적으로 복사)
+data/*.parquet
+data/cache/
+*.csv
+*.xlsx
+data.tar.gz
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Reference (크기가 크므로 제외)
+reference/
+
+# Memory Bank (개발용)
+memory-bank/
+
+# Documentation (선택적 - README.md는 제외)
+CONTRIBUTING.md
+QUICKSTART.md
+TESTING.md
+WINDSURF_SETUP.md
+
+# Distribution
+*.whl
+dist/
+build/

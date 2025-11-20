@@ -406,8 +406,22 @@ Rebalance quarterly.
 
 **목표**: FastMCP를 사용하여 핵심 라이브러리(**`PyPortfolioOpt`**)를 AI가 사용할 수 있도록 MCP Tools로 노출합니다.
 
-- [X] **데이터 수집 파이프라인** (기존 완료)
-  - [X] `collect_ohlcv.py` - yfinance → Parquet
+- [X] **데이터 수집 파이프라인** ✅
+  - [X] `scripts/download_data.py` - 개별 종목 다운로드 (yfinance → Parquet)
+  - [X] `scripts/download_sp500.py` - S&P 500 전체 다운로드 (503개 종목)
+  - [X] `bl_mcp/utils/session.py` - HTTP 세션 관리 (랜덤 User-Agent, Retry)
+  
+  **사용법**:
+  ```bash
+  # 개별 종목 다운로드
+  uv run python scripts/download_data.py AAPL MSFT GOOGL --start 2023-01-01
+  
+  # S&P 500 전체 다운로드 (상장일부터 전체 히스토리)
+  uv run python scripts/download_sp500.py
+  
+  # 일부만 테스트
+  uv run python scripts/download_sp500.py --limit 10
+  ```
 
 - [ ] **프로젝트 설정**
   - [ ] `pyproject.toml` 작성

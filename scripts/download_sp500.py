@@ -244,8 +244,8 @@ def main():
     )
     parser.add_argument(
         '--start',
-        default=None,
-        help='Start date (YYYY-MM-DD), default: None (all available historical data)'
+        default='1980-01-01',
+        help='Start date (YYYY-MM-DD), default: 1980-01-01 (maximum historical data)'
     )
     parser.add_argument(
         '--end',
@@ -281,7 +281,7 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(exist_ok=True)
     
-    start_date = args.start or "all available data"
+    start_date = args.start
     end_date = args.end or datetime.now().strftime('%Y-%m-%d')
     
     # Get S&P 500 tickers

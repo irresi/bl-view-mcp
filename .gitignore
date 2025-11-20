@@ -1,9 +1,3 @@
-# Reference materials (GitHub clones - 대용량 소스 코드만 제외)
-reference/fastmcp/
-reference/PyPortfolioOpt/
-reference/9_AGENT_PROTOCOL/
-# reference/README.md는 Git 추적 (가이드 문서)
-
 # Memory Bank (프로젝트별 컨텍스트 - 선택적으로 커밋)
 # memory-bank/
 

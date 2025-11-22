@@ -20,6 +20,7 @@ help:
 	@echo "  make test-confidence   - Test confidence type handling (int/float/string/%)"
 	@echo "  make test-views        - Test views parameter format (dict validation)"
 	@echo "  make test-idzorek      - Test Idzorek Black-Litterman implementation"
+	@echo "  make test-relative     - Test relative view support (dict-based P matrix)"
 	@echo "  make test-agent        - Run ADK agent tests (requires server)"
 	@echo "  make test-agent-dates  - Run bl_agent date handling tests (requires server)"
 	@echo "  make test-all          - Run all tests (simple + agent-dates)"
@@ -115,6 +116,10 @@ test-views:
 test-idzorek:  ## Test Idzorek implementation
 	@echo "🧪 Testing Idzorek Black-Litterman implementation..."
 	uv run python tests/test_idzorek_implementation.py
+
+test-relative:  ## Test relative view support
+	@echo "🧪 Testing relative view support (dict-based P matrix)..."
+	.venv/bin/python tests/test_relative_views_simple.py
 
 test-agent:
 	@echo "🤖 Running agent tests..."

@@ -2,11 +2,147 @@
 
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 from pypfopt import black_litterman, expected_returns, risk_models
 from pypfopt.black_litterman import BlackLittermanModel
 
 from .utils import data_loader, validators
+
+
+def _parse_views(views: dict, tickers: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert view formats to P, Q matrices.
+    
+    Supports two formats:
+    1. Dict-based P: {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+       - Absolute view: {"P": [{"AAPL": 1}], "Q": [0.10]}
+       - Relative view: {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+    2. NumPy P: {"P": [[1, -1, 0]], "Q": [0.20]}
+    
+    Args:
+        views: Views in P, Q format (dict or NumPy)
+        tickers: List of ticker symbols in portfolio
+        
+    Returns:
+        Tuple of (P matrix, Q vector) as numpy arrays
+        
+    Raises:
+        ValueError: If views format is invalid or contains unknown tickers
+    """
+    # Ensure P, Q format is used
+    if "P" not in views or "Q" not in views:
+        raise ValueError(
+            "Views must use P, Q format. "
+            "Examples:\n"
+            "  Absolute view: {'P': [{'AAPL': 1}], 'Q': [0.10]}\n"
+            "  Relative view: {'P': [{'NVDA': 1, 'AAPL': -1}], 'Q': [0.20]}\n"
+            "  NumPy format: {'P': [[1, -1, 0]], 'Q': [0.20]}"
+        )
+    
+    # Parse P and Q
+    P_input = views["P"]
+    Q = np.array(views["Q"])
+    
+    # Validate Q
+    if Q is None or len(Q) == 0:
+        raise ValueError("Q cannot be empty")
+    
+    # Validate P
+    if len(P_input) == 0:
+        raise ValueError("P matrix cannot be empty")
+    
+    if isinstance(P_input[0], dict):
+        # Dict-based P: [{"NVDA": 1, "AAPL": -1}, ...]
+        P = np.zeros((len(P_input), len(tickers)))
+        for i, view_dict in enumerate(P_input):
+            for ticker, weight in view_dict.items():
+                if ticker not in tickers:
+                    raise ValueError(
+                        f"Ticker '{ticker}' in P matrix not found in tickers list. "
+                        f"Available tickers: {tickers}"
+                    )
+                j = tickers.index(ticker)
+                P[i, j] = weight
+    else:
+        # NumPy P: [[1, -1, 0], ...]
+        P = np.array(P_input)
+        
+        # Validate dimensions
+        if P.shape[1] != len(tickers):
+            raise ValueError(
+                f"P matrix has {P.shape[1]} columns but there are {len(tickers)} tickers. "
+                f"Dimensions must match."
+            )
+    
+    # Validate P and Q dimensions match
+    if P.shape[0] != len(Q):
+        raise ValueError(
+            f"P matrix has {P.shape[0]} rows but Q has {len(Q)} elements. "
+            f"Number of views must match."
+        )
+    
+    return P, Q
+
+
+def _normalize_confidence(
+    confidence: float | list | None,
+    views: dict,
+    tickers: list[str]
+) -> list[float]:
+    """
+    Normalize confidence to list format.
+    
+    Handles confidence input types and converts to list:
+    - None → [0.5, 0.5, ...] (default neutral confidence)
+    - Float → [value, value, ...] (same confidence for all views)
+    - List → validate and return (per-view confidence)
+    
+    Args:
+        confidence: Confidence in float or list format
+        views: Views dict (to determine number of views)
+        tickers: List of tickers (unused, kept for compatibility)
+        
+    Returns:
+        List of confidence values (one per view)
+        
+    Raises:
+        ValueError: If confidence format is invalid or length doesn't match views
+        TypeError: If confidence type is not supported
+    """
+    # Determine number of views from Q
+    num_views = len(views["Q"])
+    
+    # Normalize to list based on input type
+    if confidence is None:
+        # Default: neutral confidence
+        return [0.5] * num_views
+    
+    elif isinstance(confidence, (int, float)):
+        # Single value: apply to all views
+        validated = validators.validate_confidence(confidence)
+        return [validated] * num_views
+    
+    elif isinstance(confidence, list):
+        # List: validate length and values
+        if len(confidence) != num_views:
+            raise ValueError(
+                f"Confidence length ({len(confidence)}) must match "
+                f"number of views ({num_views})"
+            )
+        
+        # Validate each confidence value
+        validated_list = []
+        for i, conf in enumerate(confidence):
+            validated = validators.validate_confidence(conf)
+            validated_list.append(validated)
+        return validated_list
+    
+    else:
+        raise TypeError(
+            f"Invalid confidence type: {type(confidence).__name__}. "
+            f"Expected float, list, or None"
+        )
 
 
 def calculate_expected_returns(
@@ -291,20 +427,36 @@ def optimize_portfolio_bl(
         market_caps: Dictionary of market capitalizations (optional).
                     Example: {"AAPL": 3000000000000, "MSFT": 2500000000000}
                     If not provided, equal weighting is used.
-        views: Your investment views (optional). MUST BE A DICTIONARY!
-              Format: {ticker: expected_return_as_decimal}
+        views: Your investment views in P, Q format (optional).
+              
+              Format: {"P": [...], "Q": [...]}
+              
               Examples:
-                {"AAPL": 0.10}              - AAPL expected to return 10%
-                {"AAPL": 0.30, "MSFT": 0.05} - AAPL 30%, MSFT 5%
-                {"AAPL": 0.10, "MSFT": -0.05} - AAPL +10%, MSFT -5%
+              1. Absolute view (single asset):
+                 {"P": [{"AAPL": 1}], "Q": [0.10]}
+                 - AAPL expected to return 10%
+                 
+              2. Relative view:
+                 {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+                 - NVDA will outperform AAPL by 20%
+                 
+              3. Multiple views:
+                 {"P": [{"NVDA": 1, "AAPL": -1}, {"NVDA": 1, "MSFT": -1}], "Q": [0.20, 0.15]}
+                 - NVDA vs AAPL: 20% difference
+                 - NVDA vs MSFT: 15% difference
+                 
+              4. NumPy format (advanced):
+                 {"P": [[1, -1, 0]], "Q": [0.20]}
+                 - Index-based (NVDA=0, AAPL=1, MSFT=2)
+              
               If not provided or None, uses only market equilibrium (no views).
               
-              CRITICAL: Do NOT pass a single number, string, or list!
         confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
                    Can be:
-                   - Single value (float): Same confidence for all views. E.g., 0.7 or 70
-                   - Dict: Different confidence per view. E.g., {"AAPL": 0.8, "MSFT": 0.6}
-                   Only used if views are provided. If views provided but confidence not specified, defaults to 0.5.
+                   - Single float: Same confidence for all views. E.g., 0.7 or 70
+                   - List: Per-view confidence. E.g., [0.9, 0.8]
+                   - None: Defaults to 0.5 (neutral)
+                   Only used if views are provided.
                    
                    Confidence scale (Idzorek method):
                    - 0.95 (95%): Very confident
@@ -328,11 +480,14 @@ def optimize_portfolio_bl(
         - prior_returns: Market-implied equilibrium returns
         - has_views: Whether views were used
     
-    Example:
+    Examples:
+        # Absolute view
         Input: tickers=["AAPL", "MSFT", "GOOGL"], period="1Y",
-               views={"AAPL": 0.10}, confidence=0.7
-        Output: {"success": True, "weights": {"AAPL": 0.40, "MSFT": 0.35, "GOOGL": 0.25},
-                "expected_return": 0.15, "volatility": 0.20, "sharpe_ratio": 0.75, ...}
+               views={"P": [{"AAPL": 1}], "Q": [0.10]}, confidence=0.7
+        
+        # Relative view
+        Input: tickers=["NVDA", "AAPL", "MSFT"], period="5Y",
+               views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.30]}, confidence=[0.85]
     """
     try:
         # Debug logging to trace parameter values (CRITICAL for debugging!)
@@ -364,25 +519,13 @@ def optimize_portfolio_bl(
                         f"Did you swap views and confidence?"
                     )
         
+        # Parse and validate views if provided
         if views:
-            validators.validate_view_dict(views, tickers)
+            # Parse views to P, Q matrices (handles all three formats)
+            P, Q = _parse_views(views, tickers)
             
-            # Handle confidence (can be single value or dict per-view)
-            if confidence is None:
-                confidence = 0.5
-            
-            # Validate and normalize confidence
-            if isinstance(confidence, dict):
-                # Per-view confidence: {"AAPL": 0.8, "MSFT": 0.6}
-                # Validate each view has a confidence
-                for ticker in views.keys():
-                    if ticker not in confidence:
-                        raise ValueError(f"Missing confidence for view '{ticker}'")
-                # Normalize each confidence value
-                confidence = {k: validators.validate_confidence(v) for k, v in confidence.items()}
-            else:
-                # Single confidence for all views
-                confidence = validators.validate_confidence(confidence)
+            # Normalize confidence to list format
+            conf_list = _normalize_confidence(confidence, views, tickers)
         
         # Resolve date range (handles period vs absolute dates)
         start_date, end_date = validators.resolve_date_range(
@@ -419,23 +562,16 @@ def optimize_portfolio_bl(
         # Create Black-Litterman model
         if views:
             # Idzorek method: User provides confidence → algorithm reverse-engineers Ω
-            # views (dict) → PyPortfolioOpt auto-generates P, Q internally
-            # confidence (0-1 or dict) → Idzorek calculates optimal Ω (uncertainty matrix)
-            
-            # Build view_confidences list in same order as views
-            if isinstance(confidence, dict):
-                # Per-view confidence: match order of views dict
-                view_conf_list = [confidence[ticker] for ticker in views.keys()]
-            else:
-                # Single confidence for all views
-                view_conf_list = [confidence] * len(views)
+            # P, Q (matrices) → Explicit view specification
+            # conf_list (list) → Per-view confidence → Idzorek calculates optimal Ω
             
             bl = BlackLittermanModel(
                 S,
                 pi=market_prior,
-                absolute_views=views,  # {"AAPL": 0.10} → P, Q auto-generated
-                omega="idzorek",        # Reverse-engineer Ω from confidence!
-                view_confidences=view_conf_list  # Per-view confidence list
+                P=P,                     # Pick matrix (converted from dict/NumPy)
+                Q=Q,                     # View returns vector
+                omega="idzorek",         # Reverse-engineer Ω from confidence!
+                view_confidences=conf_list  # Per-view confidence list
             )
             # Get posterior returns
             posterior_rets = bl.bl_returns()

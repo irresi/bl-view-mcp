@@ -711,3 +711,145 @@ tests = [
     "Default confidence (0.5)"     # ✅
 ]
 ```
+
+---
+
+## Relative View Support Patterns
+
+### P, Q 전용 API 패턴
+
+**Date**: 2025-11-22
+
+**Context**: LLM이 절대적 뷰 dict와 P, Q를 혼용하여 예측 불가능한 동작 발생
+
+**Decision**: Breaking Change - 모든 views를 P, Q 형식으로 통일
+
+**Implementation**:
+
+```python
+# ❌ 제거된 형식 (Breaking Change!)
+views = {"AAPL": 0.10}
+views = {"AAPL": 0.10, "P": [...], "Q": [...]}  # 혼용
+confidence = {"AAPL": 0.9}  # Dict confidence
+
+# ✅ 유일한 형식
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}  # Absolute
+views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}  # Relative
+confidence = 0.7  # Float
+confidence = [0.9, 0.8]  # List
+```
+
+**Benefits**:
+1. **API 일관성**: 하나의 명확한 방법
+2. **LLM 친화적**: 혼동 가능성 제거
+3. **명확한 에러**: "must use P, Q format"
+4. **확장성**: Relative view 자연스럽게 지원
+
+**Trade-offs**:
+- 기존 코드 깨짐 (Breaking Change)
+- 더 verbose (3자 대신 P, Q 명시)
+
+### Dict-based P Matrix 패턴
+
+**Pattern**: Ticker 이름 기반 P 매트릭스
+
+**Format**:
+```python
+# Dict-based (LLM 친화적)
+P = [{"NVDA": 1, "AAPL": -1}]  # NVDA - AAPL
+
+# NumPy (고급 사용자)
+P = [[1, -1, 0]]  # Index 기반
+```
+
+**Advantages**:
+1. **Order-independent**: Ticker 순서 상관없음
+2. **Self-documenting**: 코드만 봐도 의미 명확
+3. **LLM generation**: 자연어에서 쉽게 생성
+   - "NVDA가 AAPL보다 높다" → `{"NVDA": 1, "AAPL": -1}`
+
+**Implementation**:
+```python
+def _parse_views(views: dict, tickers: list[str]):
+    if isinstance(P_input[0], dict):
+        # Dict-based P
+        P = np.zeros((len(P_input), len(tickers)))
+        for i, view_dict in enumerate(P_input):
+            for ticker, weight in view_dict.items():
+                j = tickers.index(ticker)  # Ticker → Index
+                P[i, j] = weight
+    else:
+        # NumPy P
+        P = np.array(P_input)
+```
+
+### Confidence 단순화 패턴
+
+**Pattern**: Float 또는 List만 허용
+
+**Rationale**:
+- P, Q 형식에서는 ticker 이름이 P 내부에 있음
+- Dict key로 매칭 불가능
+- List가 더 명확하고 일관적
+
+**Before**:
+```python
+# 3가지 타입 지원 (혼란)
+confidence = 0.7  # Float
+confidence = {"AAPL": 0.9}  # Dict (absolute views only!)
+confidence = [0.9, 0.8]  # List
+```
+
+**After**:
+```python
+# 2가지 타입만 지원 (명확)
+confidence = 0.7  # Float → all views
+confidence = [0.9, 0.8]  # List → per-view
+```
+
+**Implementation**:
+```python
+def _normalize_confidence(confidence, views, tickers):
+    num_views = len(views["Q"])
+    
+    if confidence is None:
+        return [0.5] * num_views
+    elif isinstance(confidence, (int, float)):
+        return [confidence] * num_views
+    elif isinstance(confidence, list):
+        if len(confidence) != num_views:
+            raise ValueError("Length mismatch")
+        return confidence
+    else:
+        raise TypeError("Invalid type")  # Dict 제거!
+```
+
+### Breaking Change 관리 패턴
+
+**Pattern**: 명확한 에러 메시지로 마이그레이션 유도
+
+**Old Format Detection**:
+```python
+if "P" not in views or "Q" not in views:
+    raise ValueError(
+        "Views must use P, Q format. "
+        "Examples:\n"
+        "  Absolute view: {'P': [{'AAPL': 1}], 'Q': [0.10]}\n"
+        "  Relative view: {'P': [{'NVDA': 1, 'AAPL': -1}], 'Q': [0.20]}"
+    )
+```
+
+**Benefits**:
+1. **Clear migration path**: 예시 포함
+2. **Fail fast**: 즉시 에러로 명확한 피드백
+3. **Documentation**: 에러 메시지 자체가 문서
+
+**Testing**:
+```python
+def test_old_format_rejected():
+    result = optimize_portfolio_bl(
+        views={"AAPL": 0.10}  # Old format
+    )
+    assert not result["success"]
+    assert "must use P, Q format" in result["error"]
+```

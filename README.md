@@ -1,5 +1,5 @@
 # Black-Litterman Portfolio Optimization MCP Server
-![alt text](image.png)
+![alt text](./docs/image.png)
 이 프로젝트는 **Black-Litterman 포트폴리오 최적화**를 **Model Context Protocol (MCP)** 서버로 제공합니다.
 
 Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.

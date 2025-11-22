@@ -124,7 +124,7 @@ def optimize_portfolio_bl(
     period: Optional[str] = None,
     market_caps: Optional[dict] = None,
     views: Optional[dict] = None,
-    confidence: Optional[float | dict] = None,  # Can be float or dict!
+    confidence: Optional[float | list] = None,  # Can be float or list
     risk_aversion: Optional[float] = None
 ) -> dict:
     """
@@ -150,14 +150,37 @@ def optimize_portfolio_bl(
         market_caps: Dictionary of market capitalizations (optional)
                     Example: {"AAPL": 3000000000000, "MSFT": 2500000000000}
                     If not provided, equal weighting is used
-        views: Your investment views (optional)
-              Example: {"AAPL": 0.10, "MSFT": 0.05}
+        views: Your investment views in P, Q format (optional)
+              
+              Format: {"P": [...], "Q": [...]}
+              
+              Examples:
+              1. Absolute view:
+                 {"P": [{"AAPL": 1}], "Q": [0.10]}
+                 - "AAPL will return 10%"
+                 
+              2. Relative view:
+                 {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+                 - "NVDA will outperform AAPL by 20%"
+                 - "엔비디아가 애플보다 20% 높다"
+                 
+              3. Multiple relative views:
+                 {"P": [{"NVDA": 1, "AAPL": -1}, {"NVDA": 1, "MSFT": -1}], "Q": [0.30, 0.30]}
+                 - "NVDA vs AAPL: 30% higher"
+                 - "NVDA vs MSFT: 30% higher"
+                 - "엔비디아가 애플과 마이크로소프트보다 30% 높다"
+                 
+              4. NumPy format (advanced):
+                 {"P": [[1, -1, 0]], "Q": [0.20]}
+              
               If not provided, uses only market equilibrium
+              
         confidence: How confident you are in your views (0-100 or 0.0-1.0)
-                   Can be single value (same for all) or dict (per-view):
-                   - Single: 0.7 or 70 → all views get 70% confidence
-                   - Dict: {"AAPL": 0.8, "MSFT": 0.6} → different per view
-                   Only used if views are provided. Default: 0.5 (50%)
+                   Can be:
+                   - Single float: 0.7 or 70 → same confidence for all views
+                   - List: [0.9, 0.8] → per-view confidence
+                   - None: Defaults to 0.5 (50%)
+                   Only used if views are provided
         risk_aversion: Risk aversion parameter (optional, auto-calculated if not provided)
                       Higher values = more conservative (typically 2-3 for equities)
     
@@ -172,11 +195,15 @@ def optimize_portfolio_bl(
         - prior_returns: Market-implied equilibrium returns
         - has_views: Whether views were used
     
-    Example:
+    Examples:
+        # Absolute view: "AAPL will return 10%"
         Input: tickers=["AAPL", "MSFT", "GOOGL"], period="1Y",
-               views={"AAPL": 0.10}, confidence=0.7
-        Output: {"success": True, "weights": {"AAPL": 0.40, "MSFT": 0.35, "GOOGL": 0.25},
-                "expected_return": 0.15, "volatility": 0.20, "sharpe_ratio": 0.75, ...}
+               views={"P": [{"AAPL": 1}], "Q": [0.10]}, confidence=0.7
+        
+        # Relative view: "엔비디아가 애플보다 30% 높다"
+        Input: tickers=["NVDA", "AAPL", "MSFT"], period="5Y",
+               views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.30]},
+               confidence=[0.85]
     """
     return tools.optimize_portfolio_bl(
         tickers=tickers,

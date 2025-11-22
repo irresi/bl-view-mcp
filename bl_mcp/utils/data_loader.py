@@ -153,40 +153,123 @@ def load_prices(
     return prices_df
 
 
-def load_market_caps(
+def _fetch_market_caps_from_yfinance(tickers: list[str]) -> dict[str, float | None]:
+    """
+    Fetch market caps from yfinance API.
+
+    Args:
+        tickers: List of ticker symbols
+
+    Returns:
+        Dict mapping ticker to market cap (None if failed)
+    """
+    mcaps = {}
+    for ticker in tickers:
+        try:
+            data = yf.Ticker(ticker)
+            mcaps[ticker] = data.info.get('marketCap')
+        except Exception:
+            mcaps[ticker] = None
+    return mcaps
+
+
+def _save_market_caps_to_parquet(
+    mcaps: dict[str, float],
+    market_cap_file: str = "data/market_caps.parquet"
+) -> None:
+    """
+    Save market caps to Parquet file for caching.
+
+    Args:
+        mcaps: Dict mapping ticker to market cap
+        market_cap_file: Path to save Parquet file
+    """
+    market_cap_path = Path(market_cap_file)
+
+    # Load existing data if available
+    existing_data = {}
+    if market_cap_path.exists():
+        try:
+            existing_df = pd.read_parquet(market_cap_path)
+            existing_data = existing_df['MarketCap'].to_dict()
+        except Exception:
+            pass
+
+    # Merge with new data
+    existing_data.update(mcaps)
+
+    # Save to Parquet
+    df = pd.DataFrame({
+        'MarketCap': pd.Series(existing_data)
+    })
+    market_cap_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(market_cap_path)
+
+
+def get_market_caps(
     tickers: list[str],
     market_cap_file: str = "data/market_caps.parquet"
 ) -> pd.Series:
     """
-    Load market capitalization data.
-    
+    Get market capitalization data with automatic fallback.
+
+    Tries to load from Parquet cache first, then fetches from yfinance
+    for missing tickers. Falls back to equal weight if all else fails.
+
     Args:
         tickers: List of ticker symbols
         market_cap_file: Path to market cap Parquet file
-    
+
     Returns:
         Series with tickers as index and market caps as values
-        
-    Raises:
-        FileNotFoundError: If market cap file doesn't exist
-        ValueError: If tickers not found in market cap data
     """
     market_cap_path = Path(market_cap_file)
-    
-    if not market_cap_path.exists():
-        raise FileNotFoundError(
-            f"Market cap file not found: {market_cap_file}. "
-            f"Using equal weights as fallback."
-        )
-    
-    # Load market caps
-    mcaps_df = pd.read_parquet(market_cap_path)
-    
-    # Filter for requested tickers
-    missing_tickers = set(tickers) - set(mcaps_df.index)
+    mcaps = {}
+    missing_tickers = list(tickers)
+
+    # Step 1: Try loading from Parquet cache
+    if market_cap_path.exists():
+        try:
+            mcaps_df = pd.read_parquet(market_cap_path)
+            for ticker in tickers:
+                if ticker in mcaps_df.index:
+                    mcaps[ticker] = mcaps_df.loc[ticker, 'MarketCap']
+                    missing_tickers.remove(ticker)
+        except Exception:
+            pass
+
+    # Step 2: Fetch missing tickers from yfinance
     if missing_tickers:
-        raise ValueError(
-            f"Market caps not found for tickers: {missing_tickers}"
-        )
-    
-    return mcaps_df.loc[tickers, "MarketCap"]
+        print(f"📥 Fetching market caps from yfinance: {missing_tickers}")
+        fetched = _fetch_market_caps_from_yfinance(missing_tickers)
+
+        # Separate successful and failed fetches
+        successful = {k: v for k, v in fetched.items() if v is not None}
+        failed = [k for k, v in fetched.items() if v is None]
+
+        # Add successful fetches
+        mcaps.update(successful)
+
+        # Cache successful fetches to Parquet
+        if successful:
+            _save_market_caps_to_parquet(successful, market_cap_file)
+
+        # Step 3: Use equal weight for failed tickers
+        if failed:
+            print(f"⚠️ Could not fetch market caps for: {failed}. Using equal weight.")
+            # Use median of available market caps, or 1.0 if none available
+            if mcaps:
+                median_mcap = pd.Series(mcaps).median()
+                for ticker in failed:
+                    mcaps[ticker] = median_mcap
+            else:
+                for ticker in failed:
+                    mcaps[ticker] = 1.0
+
+    # Ensure all tickers have values (defensive)
+    for ticker in tickers:
+        if ticker not in mcaps:
+            mcaps[ticker] = 1.0
+
+    # Return as Series in original ticker order
+    return pd.Series({ticker: mcaps[ticker] for ticker in tickers})

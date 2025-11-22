@@ -16,27 +16,31 @@
 
 ## 핵심 요구사항
 
-### 1. MCP Tools 제공
+### 1. MCP Tool 제공
 
-8개의 핵심 도구를 MCP 프로토콜로 노출:
+**Single Tool** 아키텍처로 간소화:
 
-1. `calculate_expected_returns` - 기대수익률 계산
-2. `calculate_covariance_matrix` - 공분산 행렬 계산
-3. `create_investor_view` - 투자자 견해 생성
-4. `optimize_portfolio_bl` - 블랙-리터만 최적화
-5. `backtest_portfolio` - 백테스팅
-6. `get_market_data` - 시장 데이터 조회
-7. `calculate_factor_scores` - 팩터 스코어링
-8. `calculate_hrp_weights` - HRP 가중치 계산
+`optimize_portfolio_bl` - 블랙-리터만 포트폴리오 최적화
+
+**내부 처리:**
+- 데이터 수집 (yfinance)
+- 기대수익률 계산 (히스토리컬)
+- 공분산 행렬 계산 (Ledoit-Wolf)
+- 투자자 견해 (P, Q 형식)
+- Idzorek Confidence → Omega 역산
+- 최적화 수행
 
 ### 2. 유연한 전송 방식
 
 - **stdio 모드**: Windsurf, Claude Desktop 등 IDE 통합
 - **HTTP 모드**: Google ADK Agent, 웹 서비스 통합
 
-### 3. 모듈화 설계
+### 3. 통합 설계
 
-각 단계(데이터 수집, 모델링, 백테스팅)를 독립적인 Tool로 제공하여 AI가 조합 가능
+모든 단계를 하나의 Tool에 통합하여 AI가 단일 호출로 완료:
+- 복잡한 Tool 조합 불필요
+- 일관된 인터페이스
+- 간결한 프롬프트
 
 ## 성공 기준
 

@@ -17,38 +17,43 @@
 bl = BlackLittermanModel(
     S,
     pi=market_prior,
-    absolute_views=views,              # {"AAPL": 0.10}
+    P=P,                               # Pick matrix
+    Q=Q,                               # View returns
     omega="idzorek",                   # Ω 역산!
-    view_confidences=view_conf_list    # [0.7, 0.8, ...]
+    view_confidences=conf_list         # [0.7, 0.8, ...]
 )
 ```
 
 **핵심 원리**:
-- 사용자가 제공: `views` (dict), `confidence` (float or dict)
-- PyPortfolioOpt가 자동 생성: P, Q 행렬
+- 사용자가 제공: `views` (P, Q 형식), `confidence` (float or list)
 - Idzorek 알고리즘이 역산: Ω (불확실성 행렬)
 
-### 3. Absolute View 완벽 지원 ✅
+### 3. P, Q 형식 지원 ✅
 ```python
-views = {"AAPL": 0.10, "MSFT": 0.05}
-confidence = 0.7  # 모든 view에 70% 확신
+# Absolute View
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}
+confidence = 0.7
+
+# Relative View
+views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+confidence = 0.85
 ```
 
-### 4. 🆕 Per-View Confidence 지원 추가 ✅
+### 4. Per-View Confidence 지원 ✅
 ```python
-views = {"AAPL": 0.10, "MSFT": 0.05}
-confidence = {
-    "AAPL": 0.9,   # AAPL에 90% 확신
-    "MSFT": 0.6    # MSFT에 60% 확신
+views = {
+    "P": [{"NVDA": 1, "AAPL": -1}, {"GOOGL": 1}],
+    "Q": [0.25, 0.12]
 }
+confidence = [0.9, 0.6]  # 뷰별로 다른 confidence
 ```
 
 ### 5. Validation 로직 강화 ✅
-- ✅ Views 타입 검증 (dict 필수)
-- ✅ Confidence 타입 검증 (float or dict)
-- ✅ Per-view confidence 누락 검증
+- ✅ Views P, Q 형식 검증
+- ✅ Confidence 타입 검증 (float or list)
+- ✅ Confidence 길이 검증 (Q 길이와 일치)
 - ✅ Percentage 입력 지원 (70 → 0.7)
-- ✅ Parameter swap 자동 감지 및 수정
+- ✅ Unknown ticker 검증
 
 ## 🧪 테스트 결과
 
@@ -126,25 +131,20 @@ optimize_portfolio_bl(
 )
 ```
 
-## 🎯 Relative View 지원 여부
+## 🎯 Relative View 지원 ✅
 
-### ❌ 현재 미지원 (의도적)
-**이유**:
-1. **Absolute view가 더 직관적**: "AAPL 10% 수익" vs "AAPL이 MSFT보다 5% 더"
-2. **LLM 친화적**: 자연어에서 absolute view 추출이 더 쉬움
-3. **PyPortfolioOpt 내부 처리**: absolute_views → P, Q 자동 생성
-
-### 💡 Relative View가 필요하다면?
-PyPortfolioOpt는 `P`, `Q` 파라미터를 지원하므로 필요시 추가 가능.
+### Dict-based P matrix로 Relative View 지원 (구현됨!)
 
 ```python
-# Gemini 제안 방식 (현재 미구현)
-P = [[1, -1, 0]]  # NVDA - AAPL
-Q = [0.20]        # 20% 차이
-
-# 하지만 Absolute view로 충분:
-views = {"NVDA": 0.40, "AAPL": 0.20}  # 동일한 효과
+# Relative View
+views = {
+    "P": [{"NVDA": 1, "AAPL": -1}],  # NVDA - AAPL
+    "Q": [0.20]                       # 20% 차이
+}
+confidence = 0.9
 ```
+
+**자세한 구현**: `docs/RELATIVE_VIEWS_IMPLEMENTATION.md`
 
 ## 🔒 Parameter Compatibility
 

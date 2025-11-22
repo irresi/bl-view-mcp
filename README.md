@@ -6,11 +6,11 @@ Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI
 
 ## ✅ 구현 완료 (Phase 1)
 
-- 🎯 **4개 MCP Tools** 구현
-- 📊 **PyPortfolioOpt** 통합 (Idzorek 방법 포함)
-- 🚀 **FastMCP** 서버 (stdio + HTTP)
+- 🎯 **Single MCP Tool** (`optimize_portfolio_bl`) - LLM 토큰 효율성 최적화
+- 📊 **PyPortfolioOpt** 통합 (Idzorek confidence 방법)
+- 🚀 **FastMCP** 서버 (stdio + HTTP 듀얼 모드)
 - 🧪 **3가지 테스트 방법** (Direct, Agent, Web UI)
-- 📦 **자동 데이터 다운로드** (yfinance → Parquet)
+- 📦 **자동 데이터 다운로드** (GitHub Release → Parquet)
 
 ---
 
@@ -124,40 +124,11 @@ Tools → FastMCP Server (HTTP) → ADK Agent (Gemini)
 
 ## MCP Server 구조
 
-### 1. Tools (Likelihood 계산)
+### 1. Tool: `optimize_portfolio_bl`
 
-#### 1.1 `calculate_expected_returns`
+**유일한 MCP Tool** - LLM이 불필요하게 중간 단계를 호출하지 않도록 단일 Tool로 설계
 
-**목적**: 자산의 기대수익률을 계산
-
-**날짜 범위 옵션** (상호 배타적):
-- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
-- `start_date`: 절대 날짜 ("2023-01-01")
-- 둘 다 없으면 기본값 "1Y" (1년)
-
-**입력**:
-- `tickers`: List[str] - 티커 심볼 리스트
-- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
-- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `method`: str - 계산 방법 ("historical_mean", "ema")
-
-**출력**:
-
-```json
-{
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "expected_returns": [0.12, 0.15, 0.10],
-  "start_date": "2023-01-01",
-  "end_date": "2024-01-01",
-  "method": "historical_mean",
-  "annualized": true
-}
-```
-
-#### 1.2 `calculate_covariance_matrix`
-
-**목적**: 자산 간 공분산 행렬 계산
+**목적**: Black-Litterman 모델로 최적 포트폴리오 계산
 
 **날짜 범위 옵션** (상호 배타적):
 - `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
@@ -165,335 +136,82 @@ Tools → FastMCP Server (HTTP) → ADK Agent (Gemini)
 - 둘 다 없으면 기본값 "1Y" (1년)
 
 **입력**:
-- `tickers`: List[str] - 티커 심볼 리스트
-- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
-- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `method`: str - 계산 방법 ("ledoit_wolf", "sample", "exp")
-
-**출력**:
-
-```json
-{
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "covariance_matrix": [[0.04, 0.02, 0.015], ...],
-  "start_date": "2023-01-01",
-  "end_date": "2024-01-01",
-  "method": "ledoit_wolf",
-  "annualized": true
-}
-```
-
-#### 1.3 `create_investor_view`
-
-**목적**: 투자자 견해(View) 생성 - P 행렬과 Q 벡터 정의
-**입력**:
-
-- `portfolio_tickers`: List[str] - 전체 포트폴리오 티커 목록 (P 행렬 크기 결정)
-- `view_dict`: Dict[str, float] - 견해 정의 (티커: 계수)
-  - 예: `{"AAPL": 1.0, "MSFT": -1.0}` → "AAPL이 MSFT보다 높을 것"
-  - 예: `{"TSLA": 1.0}` → "TSLA가 X% 수익률"
-- `expected_return`: float - Q 벡터 값 (기대수익률 또는 수익률 차이)
-- `confidence`: float - 견해에 대한 확신도 (0~1, Omega 계산에 사용)
-
-**출력**:
-
-```json
-{
-  "view_id": "view_1",
-  "view_type": "relative",
-  "P_row": {"AAPL": 1, "MSFT": -1, "GOOGL": 0, "AMZN": 0},
-  "Q_value": 0.05,
-  "confidence": 0.8,
-  "omega": 0.0025,
-  "description": "AAPL will outperform MSFT by 5%"
-}
-```
-
-**사용 예시**:
-
-```python
-# 상대적 견해: "AAPL이 MSFT보다 5% 높을 것"
-create_investor_view(
-    portfolio_tickers=["AAPL", "MSFT", "GOOGL", "AMZN"],
-    view_dict={"AAPL": 1.0, "MSFT": -1.0},
-    expected_return=0.05,
-    confidence=0.8
-)
-
-# 절대적 견해: "TSLA가 15% 수익률"
-create_investor_view(
-    portfolio_tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"],
-    view_dict={"TSLA": 1.0},
-    expected_return=0.15,
-    confidence=0.6
-)
-```
-
-#### 1.4 `optimize_portfolio_bl`
-
-**목적**: 블랙-리터만 모델로 최적 포트폴리오 계산
-
-**날짜 범위 옵션** (상호 배타적):
-- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
-- `start_date`: 절대 날짜 ("2023-01-01")
-- 둘 다 없으면 기본값 "1Y" (1년)
-
-**입력**:
-- `tickers`: List[str] - 티커 심볼 리스트
+- `tickers`: List[str] - 티커 심볼 리스트 (순서 유지됨)
 - `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
 - `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
 - `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
 - `market_caps`: Optional[Dict[str, float]] - 시가총액 (선택, 기본값: equal weight)
-- `views`: Optional[Dict[str, float]] - **투자자 견해 (반드시 딕셔너리!)**
-  - **올바른 형식**: `{"AAPL": 0.10}` (AAPL 10% 수익 예상)
-  - **올바른 형식**: `{"AAPL": 0.30, "MSFT": 0.05}` (AAPL 30%, MSFT 5%)
-  - **올바른 형식**: `None` (견해 없음, 시장 균형만 사용)
-  - **잘못된 형식**: `0.10` ❌ (숫자), `"AAPL"` ❌ (문자열), `["AAPL", 0.10]` ❌ (리스트)
-- `confidence`: Optional[float] - 견해 확신도 (views 있을 때만 사용)
-  - **퍼센트와 소수점 모두 지원** (동등하게 작동):
-    - 퍼센트: `75`, `85`, `95` (또는 `"75%"`, `"85%"`)
-    - 소수점: `0.75`, `0.85`, `0.95` (또는 `"0.75"`)
-    - 예: `70` = `0.7` = `"70%"` (모두 70%로 처리)
-  - 기본값: 50% (0.5 - 중립)
-  - **확신도 스케일**:
-    - 95%: 매우 확신 (거의 확실)
-    - 85%: 확신 (높은 신뢰)
-    - 75%: 꽤 확신
-    - 60%: 약간 확신
-    - 50%: 보통 (중립, 견해 최소 영향)
-    - 30%: 불확실
-    - 10%: 매우 불확실
-  - **LLM 자동 변환**: "매우 확신" → 95, "확신" → 85, "보통" → 50
-- `risk_aversion`: Optional[float] - 위험 회피 계수 (선택, 기본값: 2.5)
+- `views`: Optional[Dict] - **P, Q 형식만 지원** (아래 예시 참고)
+- `confidence`: Optional[float | list] - 견해 확신도 (0.0~1.0)
+  - `float`: 모든 뷰에 동일한 confidence 적용
+  - `list`: 뷰별로 다른 confidence 적용 (예: `[0.9, 0.6]`)
+  - 기본값: 0.5 (중립)
+- `investment_style`: str - "aggressive", "balanced", "conservative" (기본값: "balanced")
+- `risk_aversion`: Optional[float] - 위험 회피 계수 (선택, 자동 계산)
+
+**Views 형식 (P, Q)**:
+
+```python
+# 1. Absolute View (단일 자산)
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}  # AAPL 10% 수익 예상
+
+# 2. Relative View (자산 간 비교)
+views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}  # NVDA가 AAPL보다 20% 아웃퍼폼
+
+# 3. Multiple Views
+views = {
+    "P": [{"NVDA": 1, "AAPL": -1}, {"GOOGL": 1}],
+    "Q": [0.25, 0.12]
+}
+confidence = [0.9, 0.6]  # 뷰별 confidence
+
+# 4. NumPy Format (고급)
+views = {"P": [[1, -1, 0]], "Q": [0.20]}  # 인덱스 기반
+```
 
 **출력**:
 
 ```json
 {
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "prior_weights": [0.4, 0.35, 0.25],
-  "posterior_weights": [0.45, 0.30, 0.25],
-  "expected_returns": [0.12, 0.10, 0.11],
-  "portfolio_return": 0.115,
-  "portfolio_volatility": 0.18,
-  "sharpe_ratio": 0.64
+  "success": true,
+  "weights": {"AAPL": 0.33, "MSFT": 0.33, "GOOGL": 0.33},
+  "expected_return": 0.12,
+  "volatility": 0.23,
+  "sharpe_ratio": 0.52,
+  "posterior_returns": {"AAPL": 0.15, "MSFT": 0.12, "GOOGL": 0.11},
+  "prior_returns": {"AAPL": 0.14, "MSFT": 0.13, "GOOGL": 0.12},
+  "risk_aversion": 2.5,
+  "has_views": true,
+  "period": {"start": "2024-01-01", "end": "2025-01-01", "days": 252}
 }
 ```
 
-#### 1.5 `backtest_portfolio`
+### 2. 계획된 Tools (Phase 2)
 
-**목적**: 포트폴리오 백테스팅
-**입력**:
-
-- `weights`: Dict[str, float] - 티커별 가중치
-- `start_date`: str - "YYYY-MM-DD"
-- `end_date`: str
-- `rebalance_frequency`: str - "monthly", "quarterly", "yearly"
-- `benchmark`: str - "SPY", "QQQ", "^KOSPI"
-- `data_type`: str
-
-**출력**:
-
-```json
-{
-  "returns": {
-    "total_return": 0.45,
-    "annualized_return": 0.12,
-    "cagr": 0.115
-  },
-  "risk": {
-    "volatility": 0.18,
-    "max_drawdown": -0.15,
-    "downside_deviation": 0.12,
-    "var_95": -0.025,
-    "cvar_95": -0.032
-  },
-  "risk_adjusted": {
-    "sharpe_ratio": 0.67,
-    "sortino_ratio": 0.85,
-    "calmar_ratio": 0.80,
-    "information_ratio": 0.45
-  },
-  "benchmark_comparison": {
-    "benchmark_return": 0.38,
-    "alpha": 0.07,
-    "beta": 0.95,
-    "tracking_error": 0.05,
-    "active_return": 0.07
-  },
-  "additional": {
-    "win_rate": 0.58,
-    "avg_win": 0.025,
-    "avg_loss": -0.018,
-    "profit_factor": 1.45,
-    "recovery_factor": 3.0
-  },
-  "time_series": {
-    "cumulative_returns": [...],
-    "dates": [...]
-  }
-}
-```
-
-#### 1.6 `get_market_data`
-
-**목적**: 시장 데이터 조회 (가격, 거래량, 펀더멘탈)
-**입력**:
-
-- `tickers`: List[str]
-- `start_date`: str - 시작 날짜 "YYYY-MM-DD"
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `lookback_days`: Optional[int] - end_date 기준 과거 N일 (start_date와 배타적)
-- `data_type`: str - 데이터 타입 ("stock", "etf", "crypto")
-- `fields`: List[str] - 조회할 필드 ["Close", "Volume", "market_cap", "sector", "pe_ratio"]
-
-**출력**:
-
-```json
-{
-  "AAPL": {
-    "prices": {
-      "2023-01-01": 178.50,
-      "2023-01-02": 179.20,
-      ...
-    },
-    "fundamentals": {
-      "market_cap": 2800000000000,
-      "sector": "Technology",
-      "pe_ratio": 29.5,
-      "dividend_yield": 0.0052
-    },
-    "statistics": {
-      "52_week_high": 198.23,
-      "52_week_low": 164.08,
-      "avg_volume": 58000000
-    }
-  },
-  ...
-}
-```
-
-#### 1.7 `calculate_factor_scores`
-
-**목적**: 팩터 기반 종목 스코어링 (주식 전용)
-**입력**:
-
-- `tickers`: List[str]
-- `start_date`: str - 시작 날짜 "YYYY-MM-DD"
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `lookback_days`: Optional[int] - end_date 기준 과거 N일 (start_date와 배타적)
-- `factors`: List[str] - ["value", "growth", "momentum", "quality", "size"]
-- `factor_weights`: Optional[Dict[str, float]] - 팩터별 가중치 (기본값: 균등)
-
-**출력**:
-
-```json
-{
-  "AAPL": {
-    "composite_score": 0.75,
-    "value_score": 0.6,
-    "growth_score": 0.9,
-    "momentum_score": 0.8,
-    "quality_score": 0.95,
-    "rank": 15,
-    "calculation_period": {
-      "start_date": "2023-01-01",
-      "end_date": "2024-01-01"
-    }
-  },
-  ...
-}
-```
-
-#### 1.8 `calculate_hrp_weights`
-
-**목적**: 계층적 위험 분산(HRP) 가중치 계산
-**입력**:
-
-- `tickers`: List[str]
-- `start_date`: str - 시작 날짜 "YYYY-MM-DD"
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `lookback_days`: Optional[int] - end_date 기준 과거 N일 (start_date와 배타적)
-- `data_type`: str
-
-**출력**:
-
-```json
-{
-  "tickers": ["AAPL", "MSFT", "GOOGL"],
-  "weights": [0.35, 0.40, 0.25],
-  "start_date": "2023-01-01",
-  "end_date": "2024-01-01",
-  "method": "hrp",
-  "diversification_ratio": 1.45
-}
-```
-
----
-
-### 2. Resources (데이터 접근)
-
-#### 2.1 `portfolio://current`
-
-현재 최적화된 포트폴리오 정보
-
-#### 2.2 `data://prices/{ticker}`
-
-특정 티커의 가격 데이터
-
-#### 2.3 `data://factors/{ticker}`
-
-특정 티커의 팩터 데이터
-
-#### 2.4 `views://saved`
-
-저장된 투자자 견해 목록
-
----
-
-### 3. Prompts (사용 예시)
-
-#### 3.1 "Optimize my portfolio"
-
-```
-I want to optimize a portfolio with these stocks: AAPL, MSFT, GOOGL, AMZN.
-Use market cap weighted prior and I believe tech stocks will outperform by 5% this year.
-```
-
-#### 3.2 "Backtest strategy"
-
-```
-Backtest a portfolio with equal weights on SPY, QQQ, IWM from 2020-01-01 to 2024-01-01.
-Rebalance quarterly.
-```
+- `backtest_portfolio` - 포트폴리오 백테스팅
+- `calculate_hrp_weights` - HRP 최적화
 
 ---
 
 ## 프로젝트 구조
 
+```
 ├── pyproject.toml              # 프로젝트 설정 및 의존성
-├── README.md
-├── .env.example                # 환경 변수 템플릿
+├── CLAUDE.md                   # Claude Code 자동 컨텍스트
 ├── bl_mcp/                     # MCP 서버 패키지
-│   ├── __init__.py
-│   ├── server.py               # FastMCP 서버 정의 (@mcp.tool)
-│   ├── tools.py                # 핵심 로직 (PyPortfolioOpt 래퍼)
+│   ├── server.py               # FastMCP 서버 (@mcp.tool 1개)
+│   ├── tools.py                # 핵심 로직 (optimize_portfolio_bl)
 │   └── utils/
-│       ├── __init__.py
 │       ├── data_loader.py      # Parquet → DataFrame
-│       └── validators.py       # 입력 검증 및 에러 처리
-├── bl_agent/                   # ADK Agent 패키지 (선택사항)
-│   ├── __init__.py
-│   ├── agent.py                # Google ADK Agent 정의
+│       └── validators.py       # 입력 검증
+├── bl_agent/                   # ADK Agent 패키지
+│   ├── agent.py                # Google ADK Agent
 │   └── prompt.py               # Agent 프롬프트
-├── start_stdio.py              # stdio 모드 실행 (Windsurf용)
-├── start_http.py               # HTTP 모드 실행 (ADK Agent용)
+├── start_stdio.py              # stdio 모드 (Windsurf용)
+├── start_http.py               # HTTP 모드 (ADK Agent용)
 ├── tests/
-│   ├── test_tools.py
-│   └── test_integration.py
-└── data/                       # Parquet 데이터 저장소
-    └── ...
+│   └── test_simple.py          # 6개 테스트 시나리오
+└── data/                       # Parquet 데이터 (503개 종목)
 ```
 
 ---

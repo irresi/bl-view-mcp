@@ -36,7 +36,7 @@ def main():
     print("=" * 60)
     print()
     
-    mcp.run(transport="http", host="localhost", port=5000)
+    mcp.run(transport="streamable-http", host="localhost", port=5000)
 
 
 if __name__ == "__main__":

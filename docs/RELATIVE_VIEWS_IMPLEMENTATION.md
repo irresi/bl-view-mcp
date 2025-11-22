@@ -270,14 +270,12 @@ views={
 
 ## 🚀 Next Steps
 
-1. **MCP Server Update**: Update `bl_mcp/server.py` docstrings to reflect new API
-2. **Agent Prompt**: Update agent prompt with relative view examples
-3. **README**: Add relative view examples to README
-4. **Memory Bank**: Update memory bank with new patterns
+- [ ] 백테스팅 기능 추가
+- [ ] 팩터 스코어링 Tool 추가
+- [ ] HRP 가중치 Tool 추가
 
 ## 📚 References
 
 - Implementation: `bl_mcp/tools.py` (_parse_views, _normalize_confidence, optimize_portfolio_bl)
 - Tests: `tests/test_relative_views_simple.py`
-- Issue: `ISSUE_RELATIVE_VIEWS.md` (full specification)
 - PyPortfolioOpt Docs: https://pyportfolioopt.readthedocs.io/en/latest/BlackLitterman.html

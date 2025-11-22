@@ -48,6 +48,8 @@ mcp.run(transport="http", host="localhost", port=5000)
   - `exp_cov()`: 지수 가중 공분산
   
 - `black_litterman.BlackLittermanModel`: 블랙-리터만 최적화
+  - P, Q 행렬로 views 정의
+  - `omega="idzorek"` + `view_confidences` 사용
   - `bl_weights()`: 최적 가중치 계산
   - `bl_returns()`: 사후 기대수익률
   

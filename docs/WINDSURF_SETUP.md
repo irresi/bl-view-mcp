@@ -35,26 +35,21 @@ Windsurf의 MCP 설정 파일: `~/.codeium/windsurf/mcp_config.json`
 Windsurf 재시작 후:
 1. 채팅 창에서 "@" 입력
 2. "black-litterman-portfolio" 서버가 목록에 나타나는지 확인
-3. 4개의 Tools가 보여야 함:
-   - calculate_expected_returns
-   - calculate_covariance_matrix
-   - create_investor_view
-   - optimize_portfolio_bl
+3. `optimize_portfolio_bl` Tool이 보여야 함
 
 ## 5. 테스트 프롬프트
 
 ```
-AAPL, MSFT, GOOGL로 구성된 포트폴리오를 최적화해줘.
-2023년 1월 1일부터 데이터를 사용하고,
+AAPL, MSFT, GOOGL로 포트폴리오를 최적화해줘.
+최근 1년 데이터를 사용하고,
 AAPL이 10% 수익을 낼 것으로 예상해. 확신도는 70%야.
 ```
 
 ## 6. 예상 동작
 
-AI가 자동으로:
-1. `optimize_portfolio_bl` 호출
-2. 결과에서 포트폴리오 가중치, 수익률, 샤프 비율 등 제시
-3. 견해가 반영된 최적 포트폴리오 제안
+AI가 자동으로 `optimize_portfolio_bl` 호출:
+- 포트폴리오 가중치, 수익률, 샤프 비율 제시
+- 견해가 반영된 최적 포트폴리오 제안
 
 ## 7. 문제 해결
 

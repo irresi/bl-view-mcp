@@ -22,8 +22,8 @@ Black-Litterman 포트폴리오 최적화를 MCP(Model Context Protocol) 서버�
 
 ```
 bl_mcp/               # MCP 서버 코드
-├── server.py         # FastMCP 서버 (MCP 래퍼)
-├── tools.py          # 핵심 로직 (4개 도구)
+├── server.py         # FastMCP 서버 (@mcp.tool 1개)
+├── tools.py          # 핵심 로직 (optimize_portfolio_bl)
 └── utils/            # 유틸리티
     ├── data_loader.py
     ├── validators.py
@@ -34,16 +34,15 @@ scripts/              # 데이터 다운로드 스크립트
 └── download_sp500.py
 
 tests/                # 테스트
-├── test_simple.py
+├── test_simple.py    # 6개 테스트 시나리오
 └── test_agent.py
 ```
 
 ### 구현된 도구 (Phase 1)
 
-1. `calculate_expected_returns` - 기대수익률 계산
-2. `calculate_covariance_matrix` - 공분산 행렬 계산
-3. `create_investor_view` - 투자자 견해 생성
-4. `optimize_portfolio_bl` - Black-Litterman 최적화
+**Single Tool 설계** - LLM 토큰 효율성을 위해 1개 Tool로 통합
+
+- `optimize_portfolio_bl` - Black-Litterman 최적화 (유일한 MCP Tool)
 
 ---
 
@@ -230,13 +229,20 @@ make test-agent
 # tests/test_simple.py 참고
 from bl_mcp.tools import optimize_portfolio_bl
 
+# Absolute View (AAPL 10% 수익 예상)
 result = optimize_portfolio_bl(
     tickers=["AAPL", "MSFT", "GOOGL"],
-    start_date="2023-01-01",
-    views={
-        "AAPL": {"relative_to": "MSFT", "return": 0.05}
-    },
-    confidence=0.3
+    period="1Y",
+    views={"P": [{"AAPL": 1}], "Q": [0.10]},
+    confidence=0.7
+)
+
+# Relative View (NVDA가 AAPL보다 20% 아웃퍼폼)
+result = optimize_portfolio_bl(
+    tickers=["NVDA", "AAPL", "MSFT"],
+    period="1Y",
+    views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]},
+    confidence=0.85
 )
 
 assert result["success"] == True
@@ -254,23 +260,25 @@ assert "weights" in result
 - **명명 규칙**: snake_case (함수, 변수), PascalCase (클래스)
 
 ```python
-def calculate_expected_returns(
+def optimize_portfolio_bl(
     tickers: list[str],
-    start_date: str,
-    end_date: Optional[str] = None,
-    method: str = "historical_mean"
+    period: Optional[str] = None,
+    views: Optional[dict] = None,
+    confidence: Optional[float | list] = None,
+    investment_style: str = "balanced"
 ) -> dict:
     """
-    Calculate expected returns for assets.
-    
+    Optimize portfolio using Black-Litterman model.
+
     Args:
-        tickers: List of ticker symbols
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD), defaults to most recent
-        method: Calculation method ("historical_mean" or "ema")
-    
+        tickers: List of ticker symbols (order preserved)
+        period: Relative period ("1Y", "3M", etc.)
+        views: Views in P, Q format (e.g., {"P": [{"AAPL": 1}], "Q": [0.10]})
+        confidence: View confidence (float or list)
+        investment_style: "aggressive", "balanced", or "conservative"
+
     Returns:
-        Dict with success status and expected returns
+        Dict with weights, returns, and performance metrics
     """
     # Implementation
 ```
@@ -396,15 +404,12 @@ gh release download data-v1.1 -p "data.tar.gz" --clobber
 - [TESTING.md](TESTING.md) - 테스트 가이드
 - [WINDSURF_SETUP.md](WINDSURF_SETUP.md) - Windsurf 연동
 
-### Memory Bank
+### 컨텍스트 문서
 
-프로젝트 컨텍스트와 설계 결정을 기록한 문서들:
-
-- `memory-bank/projectbrief.md` - 프로젝트 목표
+- `CLAUDE.md` - Claude Code 자동 컨텍스트 (핵심)
 - `memory-bank/activeContext.md` - 현재 작업 상태
 - `memory-bank/progress.md` - 진행 상황
 - `memory-bank/systemPatterns.md` - 아키텍처
-- `memory-bank/techContext.md` - 기술 스택
 
 ### Reference 자료
 

@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from pypfopt import black_litterman, expected_returns, risk_models
-from pypfopt.black_litterman import BlackLittermanModel
+from pypfopt.black_litterman import BlackLittermanModel, market_implied_risk_aversion
 
 from .utils import data_loader, validators
 
@@ -399,7 +399,8 @@ def optimize_portfolio_bl(
     market_caps: Optional[dict] = None,
     views: Optional[dict] = None,
     confidence: Optional[float | dict] = None,  # Can be float or dict!
-    risk_aversion: Optional[float] = None
+    investment_style: str = "balanced",
+    risk_aversion: Optional[float] = None  # Advanced parameter (last)
 ) -> dict:
     """
     Optimize portfolio using Black-Litterman model.
@@ -505,6 +506,12 @@ def optimize_portfolio_bl(
         validators.validate_tickers(tickers)
         validators.validate_risk_aversion(risk_aversion)
         
+        # CRITICAL: Sort tickers alphabetically for consistency
+        # This ensures P matrix indices align correctly with data structures
+        # regardless of input order from LLM
+        tickers = sorted(tickers)
+        logging.warning(f"  🔤 Sorted tickers: {tickers}")
+        
         # CRITICAL: Check parameter types first (MCP may swap them!)
         if views is not None:
             if not isinstance(views, dict):
@@ -544,15 +551,48 @@ def optimize_portfolio_bl(
         if market_caps is None:
             # Use equal market caps if not provided
             market_caps = {ticker: 1.0 for ticker in tickers}
+        else:
+            # Reindex market_caps to match sorted tickers order
+            # Fill missing tickers with equal weight
+            market_caps = {ticker: market_caps.get(ticker, 1.0) for ticker in tickers}
         
-        # Convert to Series with explicit index
+        # Convert to Series with explicit index (sorted order)
         mcaps = pd.Series(market_caps, index=tickers)
         
         # Calculate risk aversion if not provided
         if risk_aversion is None:
-            # Use default market-implied risk aversion
-            # Typically around 2-3 for equity markets
-            risk_aversion = 2.5
+            # Calculate market-implied risk aversion from SPY (S&P 500)
+            try:
+                spy_data = data_loader.load_prices(["SPY"], start_date, end_date)
+                spy_prices = spy_data["SPY"]
+                
+                # Calculate market-implied δ using PyPortfolioOpt
+                base_risk_aversion = market_implied_risk_aversion(
+                    spy_prices,
+                    frequency=252,  # Trading days per year
+                    risk_free_rate=0.02  # 2% annual risk-free rate
+                )
+                
+                # Adjust based on investment style
+                style_multipliers = {
+                    "aggressive": 0.5,    # δ × 0.5 (high concentration)
+                    "balanced": 1.0,      # δ × 1.0 (market equilibrium)
+                    "conservative": 2.0   # δ × 2.0 (high diversification)
+                }
+                
+                multiplier = style_multipliers.get(investment_style, 1.0)
+                risk_aversion = base_risk_aversion * multiplier
+                
+                logging.warning(
+                    f"  📊 Market-implied risk aversion (base): {base_risk_aversion:.3f}\n"
+                    f"  🎨 Investment style: {investment_style} (×{multiplier})\n"
+                    f"  🎯 Adjusted risk aversion: {risk_aversion:.3f}"
+                )
+            except Exception as e:
+                # Fallback to default if SPY data unavailable
+                logging.warning(f"⚠️ Could not calculate market-implied risk aversion: {e}")
+                logging.warning("⚠️ Using default risk_aversion=2.5")
+                risk_aversion = 2.5
         
         # Calculate market-implied prior returns
         market_prior = black_litterman.market_implied_prior_returns(

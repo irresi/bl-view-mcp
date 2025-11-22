@@ -7,6 +7,57 @@
 
 ## 최근 변경사항
 
+### Relative View Support 구현 완료 (2025-11-22) 🚀
+
+#### 1. **Breaking Change: P, Q 전용 API**
+   - ✅ 절대적 뷰 dict 형식 제거 (`{"AAPL": 0.10}` ❌)
+   - ✅ P, Q 형식으로 통일 (`{"P": [{"AAPL": 1}], "Q": [0.10]}` ✅)
+   - ✅ LLM 혼동 방지 (ticker 키 + P/Q 혼용 불가)
+   - ✅ 명확한 에러 메시지
+   - ✅ API 일관성 향상
+
+#### 2. **Relative View 지원**
+   - ✅ Dict-based P: `{"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}`
+   - ✅ NumPy P: `{"P": [[1, -1, 0]], "Q": [0.20]}`
+   - ✅ Absolute view도 P, Q 형식: `{"P": [{"AAPL": 1}], "Q": [0.10]}`
+   - ✅ Multiple views: `{"P": [{...}, {...}], "Q": [0.20, 0.15]}`
+
+#### 3. **Confidence 간소화**
+   - ✅ Dict confidence 제거 (혼란 방지)
+   - ✅ Float: `confidence=0.7` (모든 뷰에 동일)
+   - ✅ List: `confidence=[0.9, 0.8]` (뷰별 다르게)
+   - ✅ None: 기본값 0.5
+   - ✅ Type hint 업데이트: `float | list` (dict 제거)
+
+#### 4. **Implementation**
+   - ✅ `_parse_views()`: P, Q 필수, 절대 뷰 로직 제거
+   - ✅ `_normalize_confidence()`: dict 처리 제거
+   - ✅ Validation 강화: 혼합 형식 차단
+   - ✅ server.py docstring 업데이트 (한국어 예시 포함)
+   - ✅ tools.py docstring 업데이트
+
+#### 5. **테스트 업데이트**
+   - ✅ `test_relative_views_simple.py` 전면 수정
+   - ✅ 구 형식 거부 테스트 추가
+   - ✅ Dict confidence 거부 테스트 추가
+   - ✅ 모든 테스트 통과 (15+ 케이스)
+
+#### 6. **Design Rationale**
+   - **Why Breaking Change?**
+     - LLM이 `{"AAPL": 0.10, "P": [...], "Q": [...]}`처럼 혼용
+     - 예측 불가능한 동작
+     - 하나의 명확한 방법 = 더 적은 오류
+   
+   - **Why Remove Dict Confidence?**
+     - P, Q 뷰에서는 ticker 이름이 P 내부에 있음
+     - Dict key로 매칭 불가능
+     - List가 더 명확하고 일관적
+
+#### 7. **Documentation**
+   - ✅ MCP tool docstring 업데이트
+   - ✅ 한국어 예시: "엔비디아가 애플과 마이크로소프트보다 30% 높다"
+   - ✅ 4가지 형식 예시 (absolute, relative, multiple, NumPy)
+
 ### Idzorek 구현 검증 및 개선 (2025-11-22) ✅
 
 #### 1. **심층 검증 완료**

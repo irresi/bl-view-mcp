@@ -331,6 +331,156 @@ def load_crypto_prices(tickers, start_date, end_date):
     ...
 ```
 
+## 날짜 범위 처리 패턴 (Period Parameter)
+
+### 설계 원칙: 상호 배타적 파라미터 (Mutually Exclusive)
+
+MCP와 LLM의 특성을 고려한 날짜 범위 처리 설계:
+
+**핵심 결정**:
+- `period` (상대 기간) vs `start_date` (절대 날짜)를 분리
+- 두 파라미터를 동시 사용하지 않도록 권장
+- LLM이 의도를 명확히 전달할 수 있도록 docstring 개선
+
+### 구현 패턴
+
+```python
+# 1. 파라미터 정의 (tools.py)
+def calculate_expected_returns(
+    tickers: list[str],
+    start_date: Optional[str] = None,  # 절대 날짜: "2023-01-01"
+    end_date: Optional[str] = None,
+    period: Optional[str] = None,      # 상대 기간: "1Y", "3M"
+    method: str = "historical_mean"
+) -> dict:
+    """
+    Date Range Options (mutually exclusive):
+        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3M", "1W"
+        - Provide 'start_date' for historical data: "2023-01-01"
+        - If both provided, 'start_date' takes precedence
+        - If neither provided, defaults to "1Y" (1 year)
+    """
+    # 날짜 범위 해결
+    start_date, end_date = validators.resolve_date_range(
+        period=period,
+        start_date=start_date,
+        end_date=end_date
+    )
+```
+
+```python
+# 2. 날짜 범위 해결 로직 (validators.py)
+def resolve_date_range(
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+) -> tuple[str, str]:
+    """
+    Resolve date range from either period or absolute dates.
+    
+    Priority:
+    1. If both period and start_date provided -> use start_date (with warning)
+    2. If only start_date -> absolute date mode
+    3. If only period -> relative period mode
+    4. If neither -> default to "1Y"
+    """
+    # end_date 기본값: 오늘
+    target_end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else datetime.now()
+    
+    # 상호 배타성 체크
+    if start_date and period:
+        warnings.warn("Both provided. Using 'start_date'.")
+        period = None
+    
+    # start_date 해결
+    if start_date:
+        target_start = datetime.strptime(start_date, "%Y-%m-%d")
+    elif period:
+        period_delta = parse_period(period)  # "1Y" -> timedelta(days=365)
+        target_start = target_end - period_delta
+    else:
+        target_start = target_end - timedelta(days=365)  # 기본 1년
+    
+    return target_start.strftime("%Y-%m-%d"), target_end.strftime("%Y-%m-%d")
+```
+
+```python
+# 3. Period 파싱 (validators.py)
+def parse_period(period: str) -> timedelta:
+    """
+    Parse relative period string to timedelta.
+    
+    Supported formats:
+    - "1D", "7D" (days)
+    - "1W", "4W" (weeks)
+    - "1M", "3M", "6M" (months, ~30 days)
+    - "1Y", "2Y", "5Y" (years, ~365 days)
+    """
+    match = re.match(r"^(\d+)([DWMY])$", period.upper())
+    if not match:
+        raise ValueError(f"Invalid period: '{period}'. Use '1Y', '3M', etc.")
+    
+    amount, unit = int(match.group(1)), match.group(2)
+    
+    if unit == "D":
+        return timedelta(days=amount)
+    elif unit == "W":
+        return timedelta(weeks=amount)
+    elif unit == "M":
+        return timedelta(days=amount * 30)  # 근사값
+    elif unit == "Y":
+        return timedelta(days=amount * 365)  # 근사값
+```
+
+### 사용 시나리오
+
+```python
+# 시나리오 A: 최근 데이터 (권장)
+result = calculate_expected_returns(
+    tickers=["AAPL", "MSFT"],
+    period="1Y"  # 최근 1년
+)
+
+# 시나리오 B: 특정 구간
+result = calculate_expected_returns(
+    tickers=["AAPL", "MSFT"],
+    start_date="2020-01-01",
+    end_date="2020-12-31"  # 2020년 전체
+)
+
+# 시나리오 C: 특정 시점부터 현재까지
+result = calculate_expected_returns(
+    tickers=["AAPL", "MSFT"],
+    start_date="2023-01-01"  # end_date는 오늘
+)
+```
+
+### LLM 가이드 (Docstring)
+
+**핵심 문구**:
+- "Mutually exclusive: Provide EITHER 'period' OR 'start_date'"
+- "(RECOMMENDED)" - LLM이 period를 우선 선택하도록 유도
+- "Do NOT use with 'start_date'" - 명확한 금지 지시
+
+**이점**:
+1. **명확성**: LLM이 어떤 파라미터를 사용할지 쉽게 판단
+2. **안정성**: 파싱 로직이 단순해져 에러 감소
+3. **유지보수**: 절대/상대 날짜 처리가 명확히 분리
+4. **토큰 효율**: 복잡한 설명 불필요, 간결한 docstring
+
+### 왜 통합 인자가 아닌가?
+
+**통합 방식 (start_date에 "1Y" 또는 "2023-01-01")**:
+- ❌ 파싱 로직 복잡 (정규식 필요)
+- ❌ LLM 혼란 가능 ("1Y"가 날짜 필드에 들어갈 수 있나?)
+- ❌ 에러 메시지 모호
+
+**분리 방식 (period vs start_date)**:
+- ✅ 필드 이름만 봐도 의도 명확
+- ✅ 검증 로직 단순
+- ✅ LLM이 "Slot Filling" 방식으로 쉽게 처리
+- ✅ 금융 도메인에서 데이터 정확성 보장
+
 ## 성능 최적화
 
 ### 1. 데이터 캐싱
@@ -363,4 +513,201 @@ def optimize_portfolio_bl(...):
     if views:
         # 견해가 있을 때만 Omega 계산
         omega = calculate_omega(...)
+```
+
+## Idzorek Black-Litterman 패턴
+
+### 핵심 원리
+
+**Idzorek 방식**: Confidence → Ω (Omega) 역산
+
+```
+사용자 입력                PyPortfolioOpt 내부              Idzorek 알고리즘
+───────────────           ─────────────────────           ──────────────────
+views (dict)     →        P, Q 자동 생성          →       
+confidence (%)   →                                →       Ω 역산
+                                                  →       Black-Litterman
+                                                          최적화
+```
+
+### 구현 패턴
+
+```python
+# 1. Absolute View 사용 (간단하고 LLM 친화적)
+bl = BlackLittermanModel(
+    S,                                  # Covariance matrix
+    pi=market_prior,                    # Market equilibrium
+    absolute_views=views,               # {"AAPL": 0.10} → P, Q 자동!
+    omega="idzorek",                    # Ω 역산 알고리즘
+    view_confidences=view_conf_list     # [0.7, 0.8, ...]
+)
+
+# 2. Per-View Confidence 지원
+if isinstance(confidence, dict):
+    # View별로 다른 confidence
+    view_conf_list = [confidence[ticker] for ticker in views.keys()]
+else:
+    # 모든 view에 동일한 confidence
+    view_conf_list = [confidence] * len(views)
+```
+
+### 검증 패턴
+
+```python
+# Dict confidence validation
+if isinstance(confidence, dict):
+    for ticker in views.keys():
+        if ticker not in confidence:
+            raise ValueError(f"Missing confidence for view '{ticker}'")
+    # 각 confidence 개별 검증
+    confidence = {k: validate_confidence(v) for k, v in confidence.items()}
+```
+
+### 사용 예시
+
+```python
+# 기본: 단일 confidence
+views = {"AAPL": 0.10}
+confidence = 0.7  # 모든 view에 70%
+
+# 고급: View별 다른 confidence
+views = {"AAPL": 0.10, "MSFT": 0.05}
+confidence = {"AAPL": 0.9, "MSFT": 0.6}  # AAPL 90%, MSFT 60%
+```
+
+## Parameter Safety 패턴
+
+### Parameter Swap 감지 및 복구
+
+```python
+# CRITICAL: Check parameter types first (MCP may swap them!)
+if views is not None:
+    if not isinstance(views, dict):
+        # Check if views and confidence got swapped
+        if isinstance(views, (int, float)) and isinstance(confidence, dict):
+            # Swap them back
+            logging.warning("⚠️ PARAMETER SWAP DETECTED!")
+            views, confidence = confidence, views
+        else:
+            raise ValueError(
+                f"views must be a dict or None, got {type(views).__name__}"
+            )
+```
+
+### Keyword Arguments 패턴
+
+```python
+# server.py → tools.py (keyword args로 안전성 확보)
+return tools.optimize_portfolio_bl(
+    tickers=tickers,          # ✅ Keyword args
+    start_date=start_date,
+    end_date=end_date,
+    period=period,            # ✅ Parameter 순서 무관
+    market_caps=market_caps,
+    views=views,
+    confidence=confidence,
+    risk_aversion=risk_aversion
+)
+```
+
+### Debug Logging 패턴
+
+```python
+# Parameter 추적 로깅
+logging.warning("=" * 80)
+logging.warning(f"🔍 optimize_portfolio_bl CALLED:")
+logging.warning(f"  📊 views = {views!r} (type: {type(views).__name__})")
+logging.warning(f"  🎯 confidence = {confidence!r}")
+logging.warning("=" * 80)
+```
+
+## LLM Prompt 최적화 패턴
+
+### 간결성 우선 원칙
+
+**Before (267줄)**:
+- 중복된 설명
+- 너무 많은 예시
+- 장황한 이론
+
+**After (72줄, 73% 감소)**:
+- 핵심만 남김
+- 1개의 완벽한 예시
+- 명확한 타입 규칙
+
+### 핵심 메시지 강조
+
+```markdown
+# 핵심 규칙 (CRITICAL!)
+
+## 파라미터 타입
+- tickers: 리스트 → ["AAPL", "MSFT"]
+- views: 딕셔너리 → {"AAPL": 0.10}
+- confidence: 숫자 → 85 또는 0.85
+
+## 가장 흔한 실수 (절대 하지 마세요!)
+❌ views=0.85 (숫자 X, 딕셔너리여야 함!)
+❌ confidence={"AAPL": 0.10} (딕셔너리 X, 숫자여야 함!)
+```
+
+### 자연어 변환 간결화
+
+```markdown
+## 확신도 (confidence)
+- "매우 확신" → 95
+- "확신" → 85
+- "보통" → 50
+- "불확실" → 30
+```
+
+### 1개의 완벽한 예시
+
+```python
+# 모든 것을 보여주는 하나의 예시
+optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    period="1Y",
+    views={"AAPL": 0.10},
+    confidence=85
+)
+```
+
+## 테스트 패턴
+
+### Idzorek 구현 테스트
+
+```python
+def test_single_confidence():
+    """단일 confidence 테스트"""
+    result = optimize_portfolio_bl(
+        tickers=["AAPL", "MSFT", "GOOGL"],
+        period="1Y",
+        views={"AAPL": 0.10},
+        confidence=0.7
+    )
+    assert result["success"]
+
+def test_per_view_confidence():
+    """View별 confidence 테스트"""
+    result = optimize_portfolio_bl(
+        tickers=["AAPL", "MSFT", "GOOGL"],
+        period="1Y",
+        views={"AAPL": 0.10, "MSFT": 0.05},
+        confidence={"AAPL": 0.9, "MSFT": 0.6}
+    )
+    assert result["success"]
+```
+
+### 검증 테스트 구조
+
+```python
+# 6가지 핵심 시나리오
+tests = [
+    "Single confidence",           # ✅
+    "Per-view confidence",         # ✅
+    "Missing confidence detection",# ✅
+    "Percentage input (70 → 0.7)", # ✅
+    "Market equilibrium (no views)",# ✅
+    "Default confidence (0.5)"     # ✅
+]
 ```

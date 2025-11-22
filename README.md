@@ -42,10 +42,17 @@ make sample
 ### 3. 테스트
 
 ```bash
+# 기본 테스트 (빠름)
 make test-simple
+
+# bl_agent 날짜 처리 테스트 (서버 필요)
+make test-agent-dates
+
+# 모든 테스트
+make test-all
 ```
 
-**예상 출력**:
+**예상 출력** (test-simple):
 ```
 ✅ Success!
 📊 Portfolio Weights:
@@ -53,6 +60,11 @@ make test-simple
   MSFT: 33.33%
   GOOGL: 33.33%
 ```
+
+**bl_agent 날짜 테스트** (`test-agent-dates`):
+- bl_agent가 "최근 1년", "지난 3개월" 같은 자연어를 표준 포맷(`1Y`, `3M`)으로 변환하는지 검증
+- 9가지 시나리오: 한국어/영어, 상대/절대 날짜, 분기(Q1-Q4), YTD
+- 상세 가이드: [tests/DATE_TESTING_GUIDE.md](tests/DATE_TESTING_GUIDE.md)
 
 ### 4. 서버 실행
 
@@ -117,14 +129,18 @@ Tools → FastMCP Server (HTTP) → ADK Agent (Gemini)
 #### 1.1 `calculate_expected_returns`
 
 **목적**: 자산의 기대수익률을 계산
-**입력**:
 
+**날짜 범위 옵션** (상호 배타적):
+- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
+- `start_date`: 절대 날짜 ("2023-01-01")
+- 둘 다 없으면 기본값 "1Y" (1년)
+
+**입력**:
 - `tickers`: List[str] - 티커 심볼 리스트
-- `start_date`: str - 시작 날짜 "YYYY-MM-DD"
+- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
+- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
 - `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `lookback_days`: Optional[int] - end_date 기준 과거 N일 (start_date와 배타적)
-- `method`: str - 계산 방법 ("historical_mean", "capm", "factor_model")
-- `data_type`: str - 데이터 타입 ("stock", "etf", "crypto")
+- `method`: str - 계산 방법 ("historical_mean", "ema")
 
 **출력**:
 
@@ -142,14 +158,18 @@ Tools → FastMCP Server (HTTP) → ADK Agent (Gemini)
 #### 1.2 `calculate_covariance_matrix`
 
 **목적**: 자산 간 공분산 행렬 계산
-**입력**:
 
-- `tickers`: List[str]
-- `start_date`: str - 시작 날짜 "YYYY-MM-DD"
+**날짜 범위 옵션** (상호 배타적):
+- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
+- `start_date`: 절대 날짜 ("2023-01-01")
+- 둘 다 없으면 기본값 "1Y" (1년)
+
+**입력**:
+- `tickers`: List[str] - 티커 심볼 리스트
+- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
+- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
 - `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `lookback_days`: Optional[int] - end_date 기준 과거 N일 (start_date와 배타적)
-- `method`: str - ("sample", "ledoit_wolf", "shrinkage")
-- `data_type`: str
+- `method`: str - 계산 방법 ("ledoit_wolf", "sample", "exp")
 
 **출력**:
 
@@ -213,17 +233,39 @@ create_investor_view(
 #### 1.4 `optimize_portfolio_bl`
 
 **목적**: 블랙-리터만 모델로 최적 포트폴리오 계산
-**입력**:
 
-- `tickers`: List[str]
-- `expected_returns`: Dict[str, float] - Tool 1.1의 출력 (티커별 기대수익률)
-- `covariance_matrix`: Dict[str, Dict[str, float]] - Tool 1.2의 출력
-- `views`: List[Dict] - Tool 1.3으로 생성한 견해들 (선택사항, 빈 리스트 가능)
-- `prior_type`: str - "market_cap", "equal_weight", "hrp", "custom" (기본값: "market_cap")
-- `prior_weights`: Optional[Dict[str, float]] - prior_type이 "custom"인 경우 필요
-- `risk_aversion`: float - 위험 회피 계수 (기본값: 2.5)
-- `tau`: float - 불확실성 계수 (기본값: 0.025)
-- `data_type`: str
+**날짜 범위 옵션** (상호 배타적):
+- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
+- `start_date`: 절대 날짜 ("2023-01-01")
+- 둘 다 없으면 기본값 "1Y" (1년)
+
+**입력**:
+- `tickers`: List[str] - 티커 심볼 리스트
+- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
+- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
+- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
+- `market_caps`: Optional[Dict[str, float]] - 시가총액 (선택, 기본값: equal weight)
+- `views`: Optional[Dict[str, float]] - **투자자 견해 (반드시 딕셔너리!)**
+  - **올바른 형식**: `{"AAPL": 0.10}` (AAPL 10% 수익 예상)
+  - **올바른 형식**: `{"AAPL": 0.30, "MSFT": 0.05}` (AAPL 30%, MSFT 5%)
+  - **올바른 형식**: `None` (견해 없음, 시장 균형만 사용)
+  - **잘못된 형식**: `0.10` ❌ (숫자), `"AAPL"` ❌ (문자열), `["AAPL", 0.10]` ❌ (리스트)
+- `confidence`: Optional[float] - 견해 확신도 (views 있을 때만 사용)
+  - **퍼센트와 소수점 모두 지원** (동등하게 작동):
+    - 퍼센트: `75`, `85`, `95` (또는 `"75%"`, `"85%"`)
+    - 소수점: `0.75`, `0.85`, `0.95` (또는 `"0.75"`)
+    - 예: `70` = `0.7` = `"70%"` (모두 70%로 처리)
+  - 기본값: 50% (0.5 - 중립)
+  - **확신도 스케일**:
+    - 95%: 매우 확신 (거의 확실)
+    - 85%: 확신 (높은 신뢰)
+    - 75%: 꽤 확신
+    - 60%: 약간 확신
+    - 50%: 보통 (중립, 견해 최소 영향)
+    - 30%: 불확실
+    - 10%: 매우 불확실
+  - **LLM 자동 변환**: "매우 확신" → 95, "확신" → 85, "보통" → 50
+- `risk_aversion`: Optional[float] - 위험 회피 계수 (선택, 기본값: 2.5)
 
 **출력**:
 

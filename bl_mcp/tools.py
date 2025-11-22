@@ -11,26 +11,57 @@ from .utils import data_loader, validators
 
 def calculate_expected_returns(
     tickers: list[str],
-    start_date: str,
+    start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    period: Optional[str] = None,
     method: str = "historical_mean"
 ) -> dict:
     """
-    Calculate expected returns for assets.
+    Calculate expected returns for assets using historical data.
+    
+    This tool computes expected returns based on historical price movements.
+    Use this as the first step in portfolio optimization.
+    
+    Date Range Options (mutually exclusive):
+        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3M", "1W"
+        - Provide 'start_date' for historical data: "2023-01-01"
+        - If both provided, 'start_date' takes precedence
+        - If neither provided, defaults to "1Y" (1 year)
     
     Args:
-        tickers: List of ticker symbols
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD), defaults to most recent
-        method: Calculation method ("historical_mean" or "ema")
+        tickers: List of ticker symbols (e.g., ["AAPL", "MSFT", "GOOGL"])
+        start_date: Specific start date (YYYY-MM-DD). Use for absolute time ranges.
+                   Do NOT use with 'period'.
+        end_date: Specific end date (YYYY-MM-DD). Defaults to today if not provided.
+        period: Relative period from today (e.g., '1M', '2Y', 'ytd'). 
+               Supported: "1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y"
+               Do NOT use with 'start_date'.
+        method: Calculation method:
+               - "historical_mean" (default, recommended): Simple historical average
+               - "ema": Exponential moving average (gives more weight to recent data)
     
     Returns:
-        Dict with success status and expected returns
+        Dictionary containing:
+        - success: Whether the calculation succeeded
+        - tickers: List of tickers
+        - expected_returns: Dictionary mapping tickers to expected returns (annualized)
+        - method: Method used
+        - period: Date range and number of days used
+    
+    Example:
+        Input: tickers=["AAPL", "MSFT"], period="1Y", method="historical_mean"
+        Output: {"success": True, "expected_returns": {"AAPL": 0.15, "MSFT": 0.12}, ...}
     """
     try:
         # Validate inputs
         validators.validate_tickers(tickers)
-        validators.validate_date_range(start_date, end_date)
+        
+        # Resolve date range (handles period vs absolute dates)
+        start_date, end_date = validators.resolve_date_range(
+            period=period,
+            start_date=start_date,
+            end_date=end_date
+        )
         
         # Load price data
         prices = data_loader.load_prices(tickers, start_date, end_date)
@@ -70,26 +101,58 @@ def calculate_expected_returns(
 
 def calculate_covariance_matrix(
     tickers: list[str],
-    start_date: str,
+    start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    period: Optional[str] = None,
     method: str = "ledoit_wolf"
 ) -> dict:
     """
-    Calculate covariance matrix for assets.
+    Calculate covariance matrix for assets using historical data.
+    
+    The covariance matrix measures how assets move together. Use this for risk estimation
+    in portfolio optimization.
+    
+    Date Range Options (mutually exclusive):
+        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3M", "1W"
+        - Provide 'start_date' for historical data: "2023-01-01"
+        - If both provided, 'start_date' takes precedence
+        - If neither provided, defaults to "1Y" (1 year)
     
     Args:
-        tickers: List of ticker symbols
-        start_date: Start date (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD), defaults to most recent
-        method: Calculation method ("ledoit_wolf", "sample", or "exp")
+        tickers: List of ticker symbols (e.g., ["AAPL", "MSFT", "GOOGL"])
+        start_date: Specific start date (YYYY-MM-DD). Use for absolute time ranges.
+                   Do NOT use with 'period'.
+        end_date: Specific end date (YYYY-MM-DD). Defaults to today if not provided.
+        period: Relative period from today (e.g., '1M', '2Y'). 
+               Supported: "1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y"
+               Do NOT use with 'start_date'.
+        method: Calculation method:
+               - "ledoit_wolf" (default, recommended): Shrinkage estimator, more stable
+               - "sample": Sample covariance
+               - "exp": Exponentially-weighted covariance
     
     Returns:
-        Dict with success status and covariance matrix
+        Dictionary containing:
+        - success: Whether the calculation succeeded
+        - tickers: List of tickers
+        - covariance_matrix: Nested dictionary of covariances
+        - method: Method used
+        - period: Date range and number of days used
+    
+    Example:
+        Input: tickers=["AAPL", "MSFT"], period="1Y", method="ledoit_wolf"
+        Output: {"success": True, "covariance_matrix": {"AAPL": {"AAPL": 0.04, "MSFT": 0.02}, ...}, ...}
     """
     try:
         # Validate inputs
         validators.validate_tickers(tickers)
-        validators.validate_date_range(start_date, end_date)
+        
+        # Resolve date range (handles period vs absolute dates)
+        start_date, end_date = validators.resolve_date_range(
+            period=period,
+            start_date=start_date,
+            end_date=end_date
+        )
         
         # Load price data
         prices = data_loader.load_prices(tickers, start_date, end_date)
@@ -149,10 +212,30 @@ def create_investor_view(
         Dict with success status and view information
     """
     try:
+        # Debug logging
+        import logging
+        logging.debug(f"create_investor_view called with:")
+        logging.debug(f"  view_dict={view_dict} (type: {type(view_dict).__name__})")
+        logging.debug(f"  confidence={confidence} (type: {type(confidence).__name__})")
+        
+        # CRITICAL: Check parameter types first (MCP may swap them!)
+        if view_dict is not None:
+            if not isinstance(view_dict, dict):
+                # Check if view_dict and confidence got swapped
+                if isinstance(view_dict, (int, float)) and isinstance(confidence, dict):
+                    # Swap them back
+                    logging.warning(f"⚠️ PARAMETER SWAP DETECTED! Swapping view_dict={view_dict} and confidence={confidence}")
+                    view_dict, confidence = confidence, view_dict
+                else:
+                    raise ValueError(
+                        f"view_dict must be a dict, got {type(view_dict).__name__}. "
+                        f"Did you swap view_dict and confidence?"
+                    )
+        
         # Validate inputs
-        validators.validate_tickers(tickers)
         validators.validate_view_dict(view_dict, tickers)
-        validators.validate_confidence(confidence)
+        # Validate and normalize confidence (handles string conversion)
+        confidence = validators.validate_confidence(confidence)
         
         return {
             "success": True,
@@ -174,42 +257,139 @@ def create_investor_view(
 
 def optimize_portfolio_bl(
     tickers: list[str],
-    start_date: str,
+    start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    period: Optional[str] = None,
     market_caps: Optional[dict] = None,
     views: Optional[dict] = None,
-    confidence: float = 0.5,
+    confidence: Optional[float | dict] = None,  # Can be float or dict!
     risk_aversion: Optional[float] = None
 ) -> dict:
     """
     Optimize portfolio using Black-Litterman model.
     
-    This function wraps PyPortfolioOpt's BlackLittermanModel:
-    - Uses market-implied prior returns
-    - Applies Idzorek's method for view confidences
-    - Returns optimized portfolio weights
+    This is the main optimization tool that combines market equilibrium with your views
+    to produce optimal portfolio weights. It uses the Black-Litterman approach:
+    - Starts with market-implied equilibrium returns (prior)
+    - Incorporates your views with specified confidence (likelihood)
+    - Produces posterior returns and optimal weights
+    
+    Date Range Options (mutually exclusive):
+        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3M", "1W"
+        - Provide 'start_date' for historical data: "2023-01-01"
+        - If both provided, 'start_date' takes precedence
+        - If neither provided, defaults to "1Y" (1 year)
     
     Args:
-        tickers: List of ticker symbols
-        start_date: Start date for historical data (YYYY-MM-DD)
-        end_date: End date (YYYY-MM-DD), defaults to most recent
-        market_caps: Dict of market capitalizations (optional, will use equal if not provided)
-        views: Investor views dict {"AAPL": 0.10, ...} (optional)
-        confidence: Confidence level for views (0.0 to 1.0)
-        risk_aversion: Risk aversion parameter (auto-calculated if not provided)
+        tickers: List of ticker symbols (e.g., ["AAPL", "MSFT", "GOOGL"])
+        start_date: Specific start date (YYYY-MM-DD). Use for absolute time ranges.
+                   Only use if 'period' is not suitable. Do NOT use with 'period'.
+        end_date: Specific end date (YYYY-MM-DD). Defaults to today if not provided.
+        period: Relative period from today (e.g., '1M', '2Y'). 
+               Supported: "1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y"
+               Do NOT use with 'start_date'.
+        market_caps: Dictionary of market capitalizations (optional).
+                    Example: {"AAPL": 3000000000000, "MSFT": 2500000000000}
+                    If not provided, equal weighting is used.
+        views: Your investment views (optional). MUST BE A DICTIONARY!
+              Format: {ticker: expected_return_as_decimal}
+              Examples:
+                {"AAPL": 0.10}              - AAPL expected to return 10%
+                {"AAPL": 0.30, "MSFT": 0.05} - AAPL 30%, MSFT 5%
+                {"AAPL": 0.10, "MSFT": -0.05} - AAPL +10%, MSFT -5%
+              If not provided or None, uses only market equilibrium (no views).
+              
+              CRITICAL: Do NOT pass a single number, string, or list!
+        confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
+                   Can be:
+                   - Single value (float): Same confidence for all views. E.g., 0.7 or 70
+                   - Dict: Different confidence per view. E.g., {"AAPL": 0.8, "MSFT": 0.6}
+                   Only used if views are provided. If views provided but confidence not specified, defaults to 0.5.
+                   
+                   Confidence scale (Idzorek method):
+                   - 0.95 (95%): Very confident
+                   - 0.85 (85%): Confident
+                   - 0.75 (75%): Quite confident
+                   - 0.60 (60%): Somewhat confident
+                   - 0.50 (50%): Neutral (default)
+                   - 0.30 (30%): Uncertain
+                   - 0.10 (10%): Very uncertain
+        risk_aversion: Risk aversion parameter (optional, auto-calculated if not provided).
+                      Higher values = more conservative (typically 2-3 for equities).
     
     Returns:
-        Dict with success status and portfolio weights
+        Dictionary containing:
+        - success: Whether optimization succeeded
+        - weights: Optimal portfolio weights (dictionary)
+        - expected_return: Expected portfolio return (annualized)
+        - volatility: Expected portfolio volatility (annualized)
+        - sharpe_ratio: Sharpe ratio
+        - posterior_returns: Expected returns after incorporating views
+        - prior_returns: Market-implied equilibrium returns
+        - has_views: Whether views were used
+    
+    Example:
+        Input: tickers=["AAPL", "MSFT", "GOOGL"], period="1Y",
+               views={"AAPL": 0.10}, confidence=0.7
+        Output: {"success": True, "weights": {"AAPL": 0.40, "MSFT": 0.35, "GOOGL": 0.25},
+                "expected_return": 0.15, "volatility": 0.20, "sharpe_ratio": 0.75, ...}
     """
     try:
+        # Debug logging to trace parameter values (CRITICAL for debugging!)
+        import logging
+        logging.warning("=" * 80)
+        logging.warning(f"🔍 optimize_portfolio_bl CALLED:")
+        logging.warning(f"  📋 tickers = {tickers!r}")
+        logging.warning(f"  📊 views = {views!r} (type: {type(views).__name__})")
+        logging.warning(f"  🎯 confidence = {confidence!r} (type: {type(confidence).__name__ if confidence else 'None'})")
+        logging.warning(f"  📅 start_date = {start_date!r}")
+        logging.warning(f"  📅 period = {period!r}")
+        logging.warning("=" * 80)
+        
         # Validate inputs
         validators.validate_tickers(tickers)
-        validators.validate_date_range(start_date, end_date)
-        validators.validate_confidence(confidence)
         validators.validate_risk_aversion(risk_aversion)
+        
+        # CRITICAL: Check parameter types first (MCP may swap them!)
+        if views is not None:
+            if not isinstance(views, dict):
+                # Check if views and confidence got swapped
+                if isinstance(views, (int, float)) and isinstance(confidence, dict):
+                    # Swap them back
+                    logging.warning(f"⚠️ PARAMETER SWAP DETECTED! Swapping views={views} and confidence={confidence}")
+                    views, confidence = confidence, views
+                else:
+                    raise ValueError(
+                        f"views must be a dict or None, got {type(views).__name__}. "
+                        f"Did you swap views and confidence?"
+                    )
         
         if views:
             validators.validate_view_dict(views, tickers)
+            
+            # Handle confidence (can be single value or dict per-view)
+            if confidence is None:
+                confidence = 0.5
+            
+            # Validate and normalize confidence
+            if isinstance(confidence, dict):
+                # Per-view confidence: {"AAPL": 0.8, "MSFT": 0.6}
+                # Validate each view has a confidence
+                for ticker in views.keys():
+                    if ticker not in confidence:
+                        raise ValueError(f"Missing confidence for view '{ticker}'")
+                # Normalize each confidence value
+                confidence = {k: validators.validate_confidence(v) for k, v in confidence.items()}
+            else:
+                # Single confidence for all views
+                confidence = validators.validate_confidence(confidence)
+        
+        # Resolve date range (handles period vs absolute dates)
+        start_date, end_date = validators.resolve_date_range(
+            period=period,
+            start_date=start_date,
+            end_date=end_date
+        )
         
         # Load price data
         prices = data_loader.load_prices(tickers, start_date, end_date)
@@ -238,13 +418,24 @@ def optimize_portfolio_bl(
         
         # Create Black-Litterman model
         if views:
-            # With views: use Idzorek's method for confidence
+            # Idzorek method: User provides confidence → algorithm reverse-engineers Ω
+            # views (dict) → PyPortfolioOpt auto-generates P, Q internally
+            # confidence (0-1 or dict) → Idzorek calculates optimal Ω (uncertainty matrix)
+            
+            # Build view_confidences list in same order as views
+            if isinstance(confidence, dict):
+                # Per-view confidence: match order of views dict
+                view_conf_list = [confidence[ticker] for ticker in views.keys()]
+            else:
+                # Single confidence for all views
+                view_conf_list = [confidence] * len(views)
+            
             bl = BlackLittermanModel(
                 S,
                 pi=market_prior,
-                absolute_views=views,
-                omega="idzorek",  # Idzorek's confidence method!
-                view_confidences=[confidence] * len(views)
+                absolute_views=views,  # {"AAPL": 0.10} → P, Q auto-generated
+                omega="idzorek",        # Reverse-engineer Ω from confidence!
+                view_confidences=view_conf_list  # Per-view confidence list
             )
             # Get posterior returns
             posterior_rets = bl.bl_returns()

@@ -1,6 +1,9 @@
 # Memory Bank (프로젝트별 컨텍스트 - 선택적으로 커밋)
 # memory-bank/
 
+# Test outputs
+tests/*_results.json
+
 # Python
 __pycache__/
 *.py[cod]

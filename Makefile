@@ -15,9 +15,14 @@ help:
 	@echo "  make pack-data    - Pack data folder for sharing (creates tar.gz)"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test         - Run all tests"
-	@echo "  make test-simple  - Run simple direct tests (fastest)"
-	@echo "  make test-agent   - Run ADK agent tests (requires server)"
+	@echo "  make test              - Run basic tests (test-simple)"
+	@echo "  make test-simple       - Run simple direct tests (fastest)"
+	@echo "  make test-confidence   - Test confidence type handling (int/float/string/%)"
+	@echo "  make test-views        - Test views parameter format (dict validation)"
+	@echo "  make test-idzorek      - Test Idzorek Black-Litterman implementation"
+	@echo "  make test-agent        - Run ADK agent tests (requires server)"
+	@echo "  make test-agent-dates  - Run bl_agent date handling tests (requires server)"
+	@echo "  make test-all          - Run all tests (simple + agent-dates)"
 	@echo ""
 	@echo "Servers:"
 	@echo "  make server-http  - Start HTTP server (port 5000)"
@@ -94,10 +99,40 @@ test-simple:
 	@echo "🧪 Running simple tests..."
 	uv run python tests/test_simple.py
 
+test-confidence:
+	@echo "🧪 Testing confidence type handling..."
+	@echo "This verifies that confidence accepts int, float, and string inputs"
+	uv run python tests/test_confidence_types.py
+	@echo ""
+	@echo "Testing tool calls with various confidence types..."
+	uv run python tests/test_tool_confidence.py
+
+test-views:
+	@echo "🧪 Testing views parameter format..."
+	@echo "This verifies that views must be a dictionary with correct format"
+	uv run python tests/test_views_format.py
+
+test-idzorek:  ## Test Idzorek implementation
+	@echo "🧪 Testing Idzorek Black-Litterman implementation..."
+	uv run python tests/test_idzorek_implementation.py
+
 test-agent:
 	@echo "🤖 Running agent tests..."
 	@echo "⚠️  Make sure HTTP server is running (make server-http)"
 	uv run python tests/test_agent.py
+
+test-agent-dates:
+	@echo "📅 Running bl_agent date handling tests..."
+	@echo "⚠️  Make sure HTTP server is running (make server-http)"
+	@echo ""
+	@echo "This test verifies that bl_agent correctly converts natural language"
+	@echo "date expressions (e.g., '최근 1년', 'last 3 months') to"
+	@echo "standardized formats ('1Y', '3M', absolute dates)."
+	@echo ""
+	uv run python tests/test_agent_dates.py
+
+test-all: test-simple test-agent-dates
+	@echo "✅ All tests passed!"
 
 # Servers
 server-http:

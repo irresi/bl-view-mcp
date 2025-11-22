@@ -83,7 +83,6 @@ def optimize_portfolio_bl(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     period: Optional[str] = None,
-    market_caps: Optional[dict] = None,
     views: Optional[Union[ViewMatrix, dict]] = None,
     confidence: Optional[float | list] = None,  # Can be float or list
     investment_style: InvestmentStyle = InvestmentStyle.BALANCED,
@@ -109,12 +108,6 @@ def optimize_portfolio_bl(
         start_date: Specific start date (YYYY-MM-DD), optional
         end_date: End date (YYYY-MM-DD), optional
         period: Relative period ("1Y", "6M", "3M", "1W"), optional (PREFERRED)
-        market_caps: Dictionary of market capitalizations in USD (optional)
-                    Example: {"AAPL": 3000000000000, "MSFT": 2500000000000}
-                    Units: USD (United States Dollars)
-                    
-                    Purpose: Determines market equilibrium weights (larger cap = higher weight)
-                    If not provided, equal weighting is used (each asset gets 1/N weight)
         views: Your investment views in P, Q format (optional)
               
               Type: ViewMatrix (Pydantic model) or dict
@@ -198,18 +191,34 @@ def optimize_portfolio_bl(
     
     Returns:
         Dictionary containing:
-        - success: Whether optimization succeeded (boolean)
-        - weights: Optimal portfolio weights (dict, only if success=True)
-        - expected_return: Expected portfolio return annualized (only if success=True)
-        - volatility: Expected portfolio volatility annualized (only if success=True)
-        - sharpe_ratio: Sharpe ratio (only if success=True)
-        - posterior_returns: Expected returns after incorporating views (only if success=True)
-        - prior_returns: Market-implied equilibrium returns (only if success=True)
-        - has_views: Whether views were used (only if success=True)
-        - error: Error message (string, only if success=False)
-        - error_type: Error type name (string, only if success=False)
-        - traceback: Full error traceback (string, only if success=False)
-        
+
+        Portfolio Allocation (WEIGHTS - sum to 100%):
+        - weights: How much to invest in each asset (e.g., {"AAPL": 0.4, "MSFT": 0.6})
+                  These ALWAYS sum to 100%. Use these for actual portfolio construction.
+
+        Portfolio Performance (metrics for TOTAL portfolio):
+        - expected_return: Annualized expected return of portfolio (e.g., 0.15 = 15%)
+        - volatility: Annualized volatility/risk (e.g., 0.20 = 20%)
+        - sharpe_ratio: Risk-adjusted return (expected_return / volatility)
+
+        Individual Asset Expected Returns (NOT weights - do NOT sum to 100%):
+        - prior_returns: Market equilibrium returns BEFORE views.
+                        Per-asset annual return expectations based on market cap and covariance.
+        - posterior_returns: Expected returns AFTER incorporating views.
+                            Compare with prior_returns to see how views shifted expectations.
+
+        ⚠️ IMPORTANT: prior_returns and posterior_returns are per-asset return expectations
+        (e.g., NVDA: 38%, MSFT: 17%), NOT portfolio weights. They do NOT sum to 100%.
+
+        Other:
+        - has_views: Whether views were incorporated (bool)
+        - risk_aversion: The δ parameter used
+        - period: Data period used
+
+    Raises:
+        ValueError: Invalid tickers, views format, or insufficient data
+        Exception: Other errors (MCP handles error responses automatically)
+
         Common error cases (LLM can retry with corrections):
         - "Ticker 'XYZ' not found": Invalid ticker symbol, remove it and retry
         - "Insufficient data": Need at least 60 days, try longer period
@@ -260,13 +269,12 @@ def optimize_portfolio_bl(
     # Convert ViewMatrix to dict if needed (Pydantic model_dump)
     if isinstance(views, ViewMatrix):
         views = views.model_dump()
-    
+
     return tools.optimize_portfolio_bl(
         tickers=tickers,
         start_date=start_date,
         end_date=end_date,
         period=period,
-        market_caps=market_caps,
         views=views,
         confidence=confidence,
         investment_style=investment_style.value,

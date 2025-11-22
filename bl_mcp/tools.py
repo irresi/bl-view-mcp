@@ -150,7 +150,6 @@ def optimize_portfolio_bl(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     period: Optional[str] = None,
-    market_caps: Optional[dict] = None,
     views: Optional[dict] = None,
     confidence: Optional[float | list] = None,  # Can be float or list
     investment_style: str = "balanced",
@@ -176,12 +175,9 @@ def optimize_portfolio_bl(
         start_date: Specific start date (YYYY-MM-DD). Use for absolute time ranges.
                    Only use if 'period' is not suitable. Do NOT use with 'period'.
         end_date: Specific end date (YYYY-MM-DD). Defaults to today if not provided.
-        period: Relative period from today (e.g., '1M', '2Y'). 
+        period: Relative period from today (e.g., '1M', '2Y').
                Supported: "1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y"
                Do NOT use with 'start_date'.
-        market_caps: Dictionary of market capitalizations (optional).
-                    Example: {"AAPL": 3000000000000, "MSFT": 2500000000000}
-                    If not provided, equal weighting is used.
         views: Your investment views in P, Q format (optional).
               
               Format: {"P": [...], "Q": [...]}
@@ -226,14 +222,36 @@ def optimize_portfolio_bl(
     
     Returns:
         Dictionary containing:
-        - success: Whether optimization succeeded
-        - weights: Optimal portfolio weights (dictionary)
-        - expected_return: Expected portfolio return (annualized)
-        - volatility: Expected portfolio volatility (annualized)
-        - sharpe_ratio: Sharpe ratio
-        - posterior_returns: Expected returns after incorporating views
-        - prior_returns: Market-implied equilibrium returns
-        - has_views: Whether views were used
+
+        Portfolio Allocation (THESE ARE WEIGHTS - sum to 100%):
+        - weights: How much to invest in each asset (e.g., {"AAPL": 0.4, "MSFT": 0.6})
+                  These ALWAYS sum to 100%. Use these for actual portfolio construction.
+
+        Portfolio Performance (metrics for the TOTAL portfolio):
+        - expected_return: Annualized expected return of the portfolio (e.g., 0.15 = 15%)
+        - volatility: Annualized volatility/risk (e.g., 0.20 = 20%)
+        - sharpe_ratio: Risk-adjusted return (expected_return / volatility)
+
+        Individual Asset Expected Returns (NOT weights - do NOT sum to 100%):
+        - prior_returns: Market equilibrium returns BEFORE views (π = δ × Σ × w_mkt)
+                        These are what each asset is expected to return annually
+                        based on market cap weights and covariance.
+        - posterior_returns: Expected returns AFTER incorporating your views.
+                            Shows how views shifted return expectations.
+                            Compare with prior_returns to see view impact.
+
+        IMPORTANT: prior_returns and posterior_returns are per-asset annual return
+        expectations (e.g., NVDA: 38%, MSFT: 17%), NOT portfolio weights.
+        They do NOT and should NOT sum to 100%.
+
+        Other:
+        - has_views: Whether views were incorporated (bool)
+        - risk_aversion: The δ parameter used (higher = more conservative)
+        - period: Data period used for calculation
+
+    Raises:
+        ValueError: Invalid tickers, views format, or insufficient data
+        Exception: Other errors (MCP handles error responses automatically)
     
     Examples:
         # Absolute view
@@ -244,167 +262,149 @@ def optimize_portfolio_bl(
         Input: tickers=["NVDA", "AAPL", "MSFT"], period="5Y",
                views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.30]}, confidence=[0.85]
     """
-    try:
-        # Debug logging to trace parameter values (CRITICAL for debugging!)
-        import logging
-        logging.warning("=" * 80)
-        logging.warning(f"🔍 optimize_portfolio_bl CALLED:")
-        logging.warning(f"  📋 tickers = {tickers!r}")
-        logging.warning(f"  📊 views = {views!r} (type: {type(views).__name__})")
-        logging.warning(f"  🎯 confidence = {confidence!r} (type: {type(confidence).__name__ if confidence else 'None'})")
-        logging.warning(f"  📅 start_date = {start_date!r}")
-        logging.warning(f"  📅 period = {period!r}")
-        logging.warning("=" * 80)
-        
-        # Validate inputs
-        validators.validate_tickers(tickers)
-        validators.validate_risk_aversion(risk_aversion)
-        
-        # Note: Ticker order is preserved as provided by user
-        # This is important for NumPy P format where indices matter
-        logging.warning(f"  🔤 Tickers (order preserved): {tickers}")
-        
-        # CRITICAL: Check parameter types first (MCP may swap them!)
-        if views is not None:
-            if not isinstance(views, dict):
-                # Check if views and confidence got swapped
-                if isinstance(views, (int, float)) and isinstance(confidence, dict):
-                    # Swap them back
-                    logging.warning(f"⚠️ PARAMETER SWAP DETECTED! Swapping views={views} and confidence={confidence}")
-                    views, confidence = confidence, views
-                else:
-                    raise ValueError(
-                        f"views must be a dict or None, got {type(views).__name__}. "
-                        f"Did you swap views and confidence?"
-                    )
-        
-        # Parse and validate views if provided
-        if views:
-            # Parse views to P, Q matrices (handles all three formats)
-            P, Q = _parse_views(views, tickers)
-            
-            # Normalize confidence to list format
-            conf_list = _normalize_confidence(confidence, views, tickers)
-        
-        # Resolve date range (handles period vs absolute dates)
-        start_date, end_date = validators.resolve_date_range(
-            period=period,
-            start_date=start_date,
-            end_date=end_date
-        )
-        
-        # Load price data
-        prices = data_loader.load_prices(tickers, start_date, end_date)
-        
-        # Calculate covariance matrix
-        S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
-        
-        # Handle market caps
-        if market_caps is None:
-            # Use equal market caps if not provided
-            market_caps = {ticker: 1.0 for ticker in tickers}
-        else:
-            # Reindex market_caps to match sorted tickers order
-            # Fill missing tickers with equal weight
-            market_caps = {ticker: market_caps.get(ticker, 1.0) for ticker in tickers}
-        
-        # Convert to Series with explicit index (sorted order)
-        mcaps = pd.Series(market_caps, index=tickers)
-        
-        # Calculate risk aversion if not provided
-        if risk_aversion is None:
-            # Calculate market-implied risk aversion from SPY (S&P 500)
-            try:
-                spy_data = data_loader.load_prices(["SPY"], start_date, end_date)
-                spy_prices = spy_data["SPY"]
-                
-                # Calculate market-implied δ using PyPortfolioOpt
-                base_risk_aversion = market_implied_risk_aversion(
-                    spy_prices,
-                    frequency=252,  # Trading days per year
-                    risk_free_rate=0.02  # 2% annual risk-free rate
+    # Debug logging to trace parameter values (CRITICAL for debugging!)
+    import logging
+    logging.warning("=" * 80)
+    logging.warning(f"🔍 optimize_portfolio_bl CALLED:")
+    logging.warning(f"  📋 tickers = {tickers!r}")
+    logging.warning(f"  📊 views = {views!r} (type: {type(views).__name__})")
+    logging.warning(f"  🎯 confidence = {confidence!r} (type: {type(confidence).__name__ if confidence else 'None'})")
+    logging.warning(f"  📅 start_date = {start_date!r}")
+    logging.warning(f"  📅 period = {period!r}")
+    logging.warning("=" * 80)
+
+    # Validate inputs
+    validators.validate_tickers(tickers)
+    validators.validate_risk_aversion(risk_aversion)
+
+    # Note: Ticker order is preserved as provided by user
+    # This is important for NumPy P format where indices matter
+    logging.warning(f"  🔤 Tickers (order preserved): {tickers}")
+
+    # CRITICAL: Check parameter types first (MCP may swap them!)
+    if views is not None:
+        if not isinstance(views, dict):
+            # Check if views and confidence got swapped
+            if isinstance(views, (int, float)) and isinstance(confidence, dict):
+                # Swap them back
+                logging.warning(f"⚠️ PARAMETER SWAP DETECTED! Swapping views={views} and confidence={confidence}")
+                views, confidence = confidence, views
+            else:
+                raise ValueError(
+                    f"views must be a dict or None, got {type(views).__name__}. "
+                    f"Did you swap views and confidence?"
                 )
-                
-                # Adjust based on investment style
-                style_multipliers = {
-                    "aggressive": 0.5,    # δ × 0.5 (high concentration)
-                    "balanced": 1.0,      # δ × 1.0 (market equilibrium)
-                    "conservative": 2.0   # δ × 2.0 (high diversification)
-                }
-                
-                multiplier = style_multipliers.get(investment_style, 1.0)
-                risk_aversion = base_risk_aversion * multiplier
-                
-                logging.warning(
-                    f"  📊 Market-implied risk aversion (base): {base_risk_aversion:.3f}\n"
-                    f"  🎨 Investment style: {investment_style} (×{multiplier})\n"
-                    f"  🎯 Adjusted risk aversion: {risk_aversion:.3f}"
-                )
-            except Exception as e:
-                # Fallback to default if SPY data unavailable
-                logging.warning(f"⚠️ Could not calculate market-implied risk aversion: {e}")
-                logging.warning("⚠️ Using default risk_aversion=2.5")
-                risk_aversion = 2.5
-        
-        # Calculate market-implied prior returns
-        market_prior = black_litterman.market_implied_prior_returns(
-            mcaps, risk_aversion, S
-        )
-        
-        # Create Black-Litterman model
-        if views:
-            # Idzorek method: User provides confidence → algorithm reverse-engineers Ω
-            # P, Q (matrices) → Explicit view specification
-            # conf_list (list) → Per-view confidence → Idzorek calculates optimal Ω
-            
-            bl = BlackLittermanModel(
-                S,
-                pi=market_prior,
-                P=P,                     # Pick matrix (converted from dict/NumPy)
-                Q=Q,                     # View returns vector
-                omega="idzorek",         # Reverse-engineer Ω from confidence!
-                view_confidences=conf_list  # Per-view confidence list
+
+    # Parse and validate views if provided
+    if views:
+        # Parse views to P, Q matrices (handles all three formats)
+        P, Q = _parse_views(views, tickers)
+
+        # Normalize confidence to list format
+        conf_list = _normalize_confidence(confidence, views, tickers)
+
+    # Resolve date range (handles period vs absolute dates)
+    start_date, end_date = validators.resolve_date_range(
+        period=period,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    # Load price data
+    prices = data_loader.load_prices(tickers, start_date, end_date)
+
+    # Calculate covariance matrix
+    S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+
+    # Get market caps automatically (Parquet cache → yfinance → equal weight fallback)
+    mcaps = data_loader.get_market_caps(tickers)
+
+    # Calculate risk aversion if not provided
+    if risk_aversion is None:
+        # Calculate market-implied risk aversion from SPY (S&P 500)
+        try:
+            spy_data = data_loader.load_prices(["SPY"], start_date, end_date)
+            spy_prices = spy_data["SPY"]
+
+            # Calculate market-implied δ using PyPortfolioOpt
+            base_risk_aversion = market_implied_risk_aversion(
+                spy_prices,
+                frequency=252,  # Trading days per year
+                risk_free_rate=0.02  # 2% annual risk-free rate
             )
-            # Get posterior returns
-            posterior_rets = bl.bl_returns()
-            # Get optimized weights
-            weights = bl.bl_weights()
-            # Calculate portfolio metrics
-            perf = bl.portfolio_performance(verbose=False)
-        else:
-            # No views: use market equilibrium weights directly
-            # Market cap weighted portfolio
-            weights = mcaps / mcaps.sum()
-            posterior_rets = market_prior
-            # Manual performance calculation for no-view case
-            portfolio_return = weights.dot(posterior_rets)
-            portfolio_variance = weights.dot(S).dot(weights)
-            portfolio_vol = portfolio_variance ** 0.5
-            sharpe = portfolio_return / portfolio_vol if portfolio_vol > 0 else 0
-            perf = (portfolio_return, portfolio_vol, sharpe)
-        
-        return {
-            "success": True,
-            "weights": weights,
-            "expected_return": perf[0],
-            "volatility": perf[1],
-            "sharpe_ratio": perf[2],
-            "posterior_returns": posterior_rets.to_dict(),
-            "prior_returns": market_prior.to_dict(),
-            "risk_aversion": risk_aversion,
-            "has_views": bool(views),
-            "period": {
-                "start": start_date,
-                "end": end_date or prices.index[-1].strftime("%Y-%m-%d"),
-                "days": len(prices)
+
+            # Adjust based on investment style
+            style_multipliers = {
+                "aggressive": 0.5,    # δ × 0.5 (high concentration)
+                "balanced": 1.0,      # δ × 1.0 (market equilibrium)
+                "conservative": 2.0   # δ × 2.0 (high diversification)
             }
+
+            multiplier = style_multipliers.get(investment_style, 1.0)
+            risk_aversion = base_risk_aversion * multiplier
+
+            logging.warning(
+                f"  📊 Market-implied risk aversion (base): {base_risk_aversion:.3f}\n"
+                f"  🎨 Investment style: {investment_style} (×{multiplier})\n"
+                f"  🎯 Adjusted risk aversion: {risk_aversion:.3f}"
+            )
+        except Exception as e:
+            # Fallback to default if SPY data unavailable
+            logging.warning(f"⚠️ Could not calculate market-implied risk aversion: {e}")
+            logging.warning("⚠️ Using default risk_aversion=2.5")
+            risk_aversion = 2.5
+
+    # Calculate market-implied prior returns
+    market_prior = black_litterman.market_implied_prior_returns(
+        mcaps, risk_aversion, S
+    )
+
+    # Create Black-Litterman model
+    if views:
+        # Idzorek method: User provides confidence → algorithm reverse-engineers Ω
+        # P, Q (matrices) → Explicit view specification
+        # conf_list (list) → Per-view confidence → Idzorek calculates optimal Ω
+
+        bl = BlackLittermanModel(
+            S,
+            pi=market_prior,
+            P=P,                     # Pick matrix (converted from dict/NumPy)
+            Q=Q,                     # View returns vector
+            omega="idzorek",         # Reverse-engineer Ω from confidence!
+            view_confidences=conf_list  # Per-view confidence list
+        )
+        # Get posterior returns
+        posterior_rets = bl.bl_returns()
+        # Get optimized weights
+        weights = bl.bl_weights()
+        # Calculate portfolio metrics
+        perf = bl.portfolio_performance(verbose=False)
+    else:
+        # No views: use market equilibrium weights directly
+        # Market cap weighted portfolio
+        weights = mcaps / mcaps.sum()
+        posterior_rets = market_prior
+        # Manual performance calculation for no-view case
+        portfolio_return = weights.dot(posterior_rets)
+        portfolio_variance = weights.dot(S).dot(weights)
+        portfolio_vol = portfolio_variance ** 0.5
+        sharpe = portfolio_return / portfolio_vol if portfolio_vol > 0 else 0
+        perf = (portfolio_return, portfolio_vol, sharpe)
+
+    return {
+        "weights": weights,
+        "expected_return": perf[0],
+        "volatility": perf[1],
+        "sharpe_ratio": perf[2],
+        "posterior_returns": posterior_rets.to_dict(),
+        "prior_returns": market_prior.to_dict(),
+        "risk_aversion": risk_aversion,
+        "has_views": bool(views),
+        "period": {
+            "start": start_date,
+            "end": end_date or prices.index[-1].strftime("%Y-%m-%d"),
+            "days": len(prices)
         }
-    
-    except Exception as e:
-        import traceback
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
+    }
+
+    # Exceptions propagate to MCP - it handles error responses automatically

@@ -2,8 +2,8 @@
 
 ## 현재 상태 (2025-11-23)
 
-**Phase**: Phase 2 진행 중 (backtest_portfolio 완료)
-**초점**: PyPI 배포 완료, Claude Desktop 호환성 검증됨
+**Phase**: Phase 3 완료 (PyPI 배포)
+**초점**: v0.2.3 배포 완료, Claude Desktop 정상 작동 확인됨
 
 ---
 

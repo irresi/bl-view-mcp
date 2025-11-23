@@ -1,5 +1,6 @@
 """FastMCP server for Black-Litterman portfolio optimization."""
 
+import json
 from enum import Enum
 from typing import Optional, Union
 
@@ -266,9 +267,26 @@ def optimize_portfolio_bl(
             tickers=["005930.KS", "AAPL"],  # 005930.KS = Samsung Electronics
             period="1Y"
     """
-    # Convert ViewMatrix to dict if needed (Pydantic model_dump)
-    if isinstance(views, ViewMatrix):
-        views = views.model_dump()
+    # Handle views parameter - can be ViewMatrix, dict, or JSON string
+    if views is not None:
+        # If string (common from Claude Desktop MCP calls), parse as JSON
+        if isinstance(views, str):
+            try:
+                views = json.loads(views.strip())
+            except json.JSONDecodeError as e:
+                raise ValueError(
+                    f"views must be a valid JSON object, got string that failed to parse: {e}. "
+                    f"Example: {{\"P\": [{{\"NVDA\": 1, \"AAPL\": -1}}], \"Q\": [0.20]}}"
+                )
+        # If ViewMatrix Pydantic model, convert to dict
+        elif isinstance(views, ViewMatrix):
+            views = views.model_dump()
+        # If already dict, use as-is
+        elif not isinstance(views, dict):
+            raise ValueError(
+                f"views must be a dict or ViewMatrix, got {type(views).__name__}. "
+                f"Example: {{\"P\": [{{\"NVDA\": 1, \"AAPL\": -1}}], \"Q\": [0.20]}}"
+            )
 
     return tools.optimize_portfolio_bl(
         tickers=tickers,

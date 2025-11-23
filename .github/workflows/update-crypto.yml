@@ -1,0 +1,89 @@
+name: Update Crypto Data
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC (crypto markets are 24/7, no market close)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: 'Full refresh (ignore existing data)'
+        required: false
+        default: 'false'
+        type: boolean
+      exchange:
+        description: 'Exchange to use'
+        required: false
+        default: 'binance'
+        type: string
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies (with crypto extra)
+        run: uv sync --extra crypto
+
+      - name: Download existing data (if incremental)
+        if: ${{ github.event.inputs.full_refresh != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download data-crypto-latest -p "data.tar.gz" --clobber 2>/dev/null && \
+            tar -xzf data.tar.gz && rm data.tar.gz || \
+            echo "No existing data found, will do full download"
+
+      - name: Download Crypto data
+        run: |
+          EXCHANGE="${{ github.event.inputs.exchange || 'binance' }}"
+          uv run python scripts/download_crypto.py \
+            --start 2020-01-01 \
+            --exchange "$EXCHANGE" \
+            --quote USDT
+          echo "Downloaded $(ls data/*.parquet 2>/dev/null | wc -l) parquet files"
+
+      - name: Pack data
+        run: |
+          tar -czvf data.tar.gz data/
+          ls -lh data.tar.gz
+
+      - name: Create/Update Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete data-crypto-latest --yes 2>/dev/null || true
+
+          gh release create data-crypto-latest \
+            --title "Crypto Data (Auto-Updated)" \
+            --notes "Automatically updated cryptocurrency price data.
+
+          **Contents:**
+          - Top 100 cryptocurrencies by market cap
+          - BTC, ETH, BNB, SOL, XRP, ADA, DOGE, etc.
+          - Daily OHLCV data from 2020-01-01
+          - Source: Binance (USDT pairs)
+
+          **Last Updated:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          **Usage:**
+          \`\`\`bash
+          make download-crypto
+          \`\`\`
+
+          **Note:** Requires \`uv sync --extra crypto\` for ccxt dependency." \
+            data.tar.gz

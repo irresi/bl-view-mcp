@@ -153,6 +153,53 @@ def test_multiple_views()              # Per-view confidence
 
 ---
 
+---
+
+## 프로젝트 분리 아키텍처 (2025-11-23)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  bl-orchestrator (별도 프로젝트)                         │
+│  ├── CrewAI Multi-agent                                 │
+│  │   ├── Bull Agent (낙관론)                            │
+│  │   ├── Bear Agent (비관론)                            │
+│  │   └── Moderator Agent (합의 도출)                    │
+│  └── 출력: {"P": [...], "Q": [...], "confidence": [...]}│
+└──────────────────────┬──────────────────────────────────┘
+                       │ MCP Protocol
+┌──────────────────────▼──────────────────────────────────┐
+│  bl-mcp (이 프로젝트)                                    │
+│  ├── optimize_portfolio_bl (기존)                       │
+│  ├── backtest_portfolio (Phase 2)                       │
+│  └── calculate_hrp_weights (Phase 2, 선택)              │
+└─────────────────────────────────────────────────────────┘
+```
+
+### View Generation 전략 변경
+
+**이전 계획 (폐기)**:
+```python
+# 규칙 기반 - 자의적
+if rsi < 30:
+    Q = 0.05  # 왜 5%?
+    confidence = 0.6  # 왜 60%?
+```
+
+**새 접근 (채택)**:
+```
+Multi-agent debate:
+  Bull: "AAPL P/E 낮고 모멘텀 강함, 15% 아웃퍼폼"
+  Bear: "성장 둔화, 5%가 현실적"
+  Moderator: "합의: 8%, confidence 65%"
+```
+
+**이유**:
+1. 절대 뷰는 예측 불가능 (누가 AAPL이 정확히 10% 오를지 알겠는가?)
+2. 상대 뷰는 논쟁으로 정당화 가능 ("A가 B보다 나을 것")
+3. LLM이 데이터 보고 직접 reasoning하는 게 규칙보다 유연
+
+---
+
 ## 참고
 
 상세 컨텍스트: `CLAUDE.md` (Claude Code 자동 로드)

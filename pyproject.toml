@@ -1,6 +1,6 @@
 [project]
 name = "black-litterman-mcp"
-version = "0.1.5"
+dynamic = ["version"]
 description = "Black-Litterman Portfolio Optimization MCP Server"
 readme = "README.md"
 license = {text = "MIT"}
@@ -58,8 +58,11 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bl_mcp"]

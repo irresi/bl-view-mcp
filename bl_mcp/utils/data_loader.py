@@ -1,5 +1,6 @@
 """Data loading utilities for Black-Litterman MCP server."""
 
+import os
 import tarfile
 import urllib.request
 from datetime import datetime, timedelta
@@ -8,6 +9,31 @@ from typing import Optional
 
 import pandas as pd
 import yfinance as yf
+
+
+def get_default_data_dir() -> str:
+    """
+    Get the default data directory path.
+
+    Priority:
+    1. BL_DATA_DIR environment variable (explicit override)
+    2. ~/.black-litterman/data (user home directory - always writable)
+
+    This ensures the MCP server works even when run from read-only
+    locations like Claude Desktop (which runs from root /).
+    """
+    # Check environment variable first
+    env_dir = os.getenv("BL_DATA_DIR")
+    if env_dir:
+        return env_dir
+
+    # Use home directory (always writable)
+    home_data_dir = os.path.expanduser("~/.black-litterman/data")
+    return home_data_dir
+
+
+# Default data directory - used throughout the module
+DEFAULT_DATA_DIR = get_default_data_dir()
 
 
 # Dataset configurations
@@ -34,7 +60,7 @@ DATASET_CONFIGS = {
 GITHUB_RELEASE_BASE = "https://github.com/irresi/bl-view-mcp/releases/download"
 
 
-def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> None:
+def ensure_data_available(data_dir: str | None = None, dataset: str = "snp500") -> None:
     """
     Ensure data is available by downloading from GitHub Release if needed.
 
@@ -50,6 +76,8 @@ def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> No
         Downloads data.tar.gz from GitHub Release on first run.
         Data is cached locally for subsequent runs.
     """
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
     data_path = Path(data_dir)
 
     # Check if data directory exists and has parquet files
@@ -71,7 +99,8 @@ def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> No
     if "fallback_tag" in config:
         release_tags.append(config["fallback_tag"])
 
-    tar_path = "data.tar.gz"
+    # Use temp file in parent directory of data_path (writable location)
+    tar_path = data_path.parent / "data.tar.gz"
     download_success = False
 
     def _download_progress(block_num: int, block_size: int, total_size: int) -> None:
@@ -89,7 +118,7 @@ def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> No
         release_url = f"{GITHUB_RELEASE_BASE}/{tag}/data.tar.gz"
         try:
             print(f"   Trying {release_url}...")
-            urllib.request.urlretrieve(release_url, tar_path, reporthook=_download_progress)
+            urllib.request.urlretrieve(release_url, str(tar_path), reporthook=_download_progress)
             download_success = True
             break
         except Exception as e:
@@ -102,13 +131,13 @@ def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> No
         raise RuntimeError(f"Failed to download {dataset} data")
 
     try:
-        # Extract tar.gz
+        # Extract tar.gz to parent directory (tar contains 'data/' folder)
         print("   Extracting files...")
-        with tarfile.open(tar_path, "r:gz") as tar:
-            tar.extractall(".")
+        with tarfile.open(str(tar_path), "r:gz") as tar:
+            tar.extractall(str(data_path.parent))
 
         # Clean up tar file
-        Path(tar_path).unlink()
+        tar_path.unlink()
 
         # Verify download
         file_count = len(list(data_path.glob("*.parquet")))
@@ -119,7 +148,7 @@ def ensure_data_available(data_dir: str = "data", dataset: str = "snp500") -> No
         raise
 
 
-def _fetch_and_save_ticker(ticker: str, data_dir: str = "data") -> bool:
+def _fetch_and_save_ticker(ticker: str, data_dir: str | None = None) -> bool:
     """
     Fetch ticker data from yfinance and save to Parquet.
 
@@ -130,6 +159,8 @@ def _fetch_and_save_ticker(ticker: str, data_dir: str = "data") -> bool:
     Returns:
         True if successful, False otherwise
     """
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
     try:
         print(f"📥 Downloading {ticker} data from yfinance...")
         data = yf.download(ticker, period="10y", progress=False)
@@ -153,26 +184,28 @@ def load_prices(
     tickers: list[str],
     start_date: str,
     end_date: Optional[str] = None,
-    data_dir: str = "data"
+    data_dir: str | None = None
 ) -> pd.DataFrame:
     """
     Load price data from Parquet files.
-    
+
     Automatically downloads data from GitHub Release on first run if not available.
-    
+
     Args:
         tickers: List of ticker symbols
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD), defaults to most recent date
         data_dir: Directory containing Parquet files
-    
+
     Returns:
         DataFrame with tickers as columns and dates as index
-        
+
     Raises:
         FileNotFoundError: If data file doesn't exist after download attempt
         ValueError: If no data available for date range
     """
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
     # Ensure data is available (auto-download on first run)
     ensure_data_available(data_dir)
     
@@ -295,7 +328,7 @@ def _save_market_caps_to_parquet(
 
 def get_market_caps(
     tickers: list[str],
-    market_cap_file: str = "data/market_caps.parquet"
+    market_cap_file: str | None = None
 ) -> pd.Series:
     """
     Get market capitalization data with automatic fallback.
@@ -310,6 +343,8 @@ def get_market_caps(
     Returns:
         Series with tickers as index and market caps as values
     """
+    if market_cap_file is None:
+        market_cap_file = f"{DEFAULT_DATA_DIR}/market_caps.parquet"
     market_cap_path = Path(market_cap_file)
     mcaps = {}
     missing_tickers = list(tickers)
@@ -370,7 +405,7 @@ def save_custom_price_data(
     ticker: str,
     prices: list[dict],
     source: str = "user",
-    data_dir: str = "data"
+    data_dir: str | None = None
 ) -> dict:
     """
     Save custom price data uploaded by user or external MCP.
@@ -385,6 +420,9 @@ def save_custom_price_data(
         Result dict with success status and metadata
     """
     import json
+
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
 
     # Validate input
     if not prices:
@@ -444,7 +482,7 @@ def load_and_save_from_file(
     date_column: str = "date",
     close_column: str = "close",
     source: str = "file",
-    data_dir: str = "data"
+    data_dir: str | None = None
 ) -> dict:
     """
     Load price data from external file and save to internal format.
@@ -460,6 +498,9 @@ def load_and_save_from_file(
     Returns:
         Result dict with success status and metadata
     """
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
+
     file_path = Path(file_path)
 
     if not file_path.exists():
@@ -505,11 +546,14 @@ def load_and_save_from_file(
 def _register_custom_ticker(
     ticker: str,
     source: str,
-    data_dir: str = "data"
+    data_dir: str | None = None
 ) -> None:
     """Register a custom ticker in tracking file."""
     import json
     from datetime import datetime
+
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
 
     tracking_file = Path(data_dir) / "custom_tickers.json"
 
@@ -537,7 +581,7 @@ def _register_custom_ticker(
 def list_tickers(
     dataset: str | None = None,
     search: str | None = None,
-    data_dir: str = "data"
+    data_dir: str | None = None
 ) -> dict:
     """
     List available tickers.
@@ -551,6 +595,9 @@ def list_tickers(
         Dict with tickers list and metadata
     """
     import json
+
+    if data_dir is None:
+        data_dir = DEFAULT_DATA_DIR
 
     data_path = Path(data_dir)
 

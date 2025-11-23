@@ -276,17 +276,228 @@ def test_list_available_tickers():
         print(f"\n❌ Failed: {e}")
 
 
+# =============================================================================
+# Backtest Tests
+# =============================================================================
+
+def test_backtest_buy_and_hold():
+    """Test basic buy and hold backtest."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Backtest - Buy and Hold Strategy")
+    print("=" * 60)
+
+    try:
+        result = tools.backtest_portfolio(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            weights={"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25},
+            period="1Y",
+            strategy="buy_and_hold",
+            benchmark="SPY"
+        )
+
+        print("\n✅ Success!")
+        print(f"\n📊 Performance Metrics:")
+        print(f"  Total Return: {result['total_return']:.2%}")
+        print(f"  CAGR: {result['cagr']:.2%}")
+        print(f"  Volatility: {result['volatility']:.2%}")
+        print(f"  Sharpe Ratio: {result['sharpe_ratio']:.2f}")
+        print(f"  Max Drawdown: {result['max_drawdown']:.2%}")
+
+        print(f"\n💰 Portfolio Value:")
+        print(f"  Initial: ${result['initial_capital']:,.2f}")
+        print(f"  Final: ${result['final_value']:,.2f}")
+
+        print(f"\n📈 Benchmark Comparison (SPY):")
+        print(f"  Benchmark Return: {result.get('benchmark_return', 0):.2%}")
+        print(f"  Excess Return: {result.get('excess_return', 0):.2%}")
+        print(f"  Alpha: {result.get('alpha', 0):.2%}")
+        print(f"  Beta: {result.get('beta', 0):.2f}")
+
+        print(f"\n💸 Trading Costs:")
+        print(f"  Total Fees: ${result['total_fees_paid']:.2f}")
+        print(f"  Rebalances: {result['num_rebalances']}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def test_backtest_passive_rebalance():
+    """Test passive rebalancing backtest."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Backtest - Passive Rebalance Strategy (Monthly)")
+    print("=" * 60)
+
+    try:
+        result = tools.backtest_portfolio(
+            tickers=["AAPL", "MSFT"],
+            weights={"AAPL": 0.6, "MSFT": 0.4},
+            period="1Y",
+            strategy="passive_rebalance"
+        )
+
+        print("\n✅ Success!")
+        print(f"\n📊 Performance:")
+        print(f"  Total Return: {result['total_return']:.2%}")
+        print(f"  Sharpe Ratio: {result['sharpe_ratio']:.2f}")
+        print(f"  Sortino Ratio: {result['sortino_ratio']:.2f}")
+        print(f"  Calmar Ratio: {result['calmar_ratio']:.2f}")
+
+        print(f"\n🔄 Rebalancing Info:")
+        print(f"  Strategy: {result['strategy']}")
+        print(f"  Rebalances: {result['num_rebalances']}")
+        print(f"  Turnover: {result['turnover']:.2%}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def test_backtest_risk_managed():
+    """Test risk-managed backtest with stop-loss."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Backtest - Risk Managed Strategy (Stop-Loss)")
+    print("=" * 60)
+
+    try:
+        result = tools.backtest_portfolio(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            weights={"AAPL": 0.5, "MSFT": 0.3, "GOOGL": 0.2},
+            period="2Y",
+            strategy="risk_managed"
+        )
+
+        print("\n✅ Success!")
+        print(f"\n📊 Performance:")
+        print(f"  Total Return: {result['total_return']:.2%}")
+        print(f"  Max Drawdown: {result['max_drawdown']:.2%}")
+
+        print(f"\n🛡️ Risk Management:")
+        print(f"  Stop-Loss: {result['config']['stop_loss']:.0%}")
+        print(f"  MDD Limit: {result['config']['max_drawdown_limit']:.0%}")
+        print(f"  Liquidated: {result['is_liquidated']}")
+        if result['liquidation_reason']:
+            print(f"  Reason: {result['liquidation_reason']}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def test_backtest_custom_config():
+    """Test backtest with custom configuration."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Backtest - Custom Configuration (Quarterly Rebalance)")
+    print("=" * 60)
+
+    try:
+        result = tools.backtest_portfolio(
+            tickers=["AAPL", "MSFT"],
+            weights={"AAPL": 0.5, "MSFT": 0.5},
+            period="1Y",
+            custom_config={
+                "rebalance_frequency": "quarterly",
+                "fees": 0.002,
+                "slippage": 0.001
+            }
+        )
+
+        print("\n✅ Success!")
+        print(f"\n📊 Performance:")
+        print(f"  Total Return: {result['total_return']:.2%}")
+
+        print(f"\n⚙️ Custom Config Applied:")
+        print(f"  Rebalance Frequency: {result['config']['rebalance_frequency']}")
+        print(f"  Fees: {result['config']['fees']:.2%}")
+        print(f"  Slippage: {result['config']['slippage']:.2%}")
+        print(f"  Rebalances: {result['num_rebalances']}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def test_optimize_then_backtest():
+    """Test typical workflow: optimize → backtest."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Workflow - Optimize → Backtest")
+    print("=" * 60)
+
+    try:
+        # Step 1: Optimize
+        print("\n📌 Step 1: Optimizing portfolio with Black-Litterman...")
+        bl_result = tools.optimize_portfolio_bl(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            period="1Y",
+            views={"P": [{"AAPL": 1, "MSFT": -1}], "Q": [0.10]},
+            confidence=0.7
+        )
+
+        print(f"\n  📊 Optimized Weights:")
+        for ticker, weight in bl_result["weights"].items():
+            print(f"    {ticker}: {weight:.2%}")
+        print(f"  Expected Return: {bl_result['expected_return']:.2%}")
+        print(f"  Sharpe Ratio: {bl_result['sharpe_ratio']:.2f}")
+
+        # Step 2: Backtest
+        print("\n📌 Step 2: Backtesting optimized portfolio...")
+        backtest_result = tools.backtest_portfolio(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            weights=bl_result["weights"],
+            period="2Y",
+            strategy="passive_rebalance",
+            benchmark="SPY"
+        )
+
+        print(f"\n  📈 Backtest Results:")
+        print(f"    Total Return: {backtest_result['total_return']:.2%}")
+        print(f"    CAGR: {backtest_result['cagr']:.2%}")
+        print(f"    Sharpe Ratio: {backtest_result['sharpe_ratio']:.2f}")
+        print(f"    Max Drawdown: {backtest_result['max_drawdown']:.2%}")
+
+        if 'excess_return' in backtest_result:
+            print(f"\n  📊 vs Benchmark (SPY):")
+            print(f"    Excess Return: {backtest_result['excess_return']:.2%}")
+            print(f"    Alpha: {backtest_result['alpha']:.2%}")
+
+        print("\n✅ Workflow completed successfully!")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
 if __name__ == "__main__":
     print("\n🧪 Black-Litterman Tools - Simple Tests\n")
 
+    # Optimization tests
     test_optimize_basic()
     test_optimize_with_absolute_view()
     test_optimize_with_relative_view()
     test_optimize_with_numpy_p()
     test_investment_styles()
     test_multiple_views()
+
+    # Data management tests
     test_upload_price_data()
     test_list_available_tickers()
+
+    # Backtest tests
+    test_backtest_buy_and_hold()
+    test_backtest_passive_rebalance()
+    test_backtest_risk_managed()
+    test_backtest_custom_config()
+    test_optimize_then_backtest()
 
     print("\n" + "=" * 60)
     print("✅ All tests completed!")

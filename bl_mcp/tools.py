@@ -925,6 +925,10 @@ def backtest_portfolio(
     # Validate inputs
     validators.validate_tickers(tickers)
 
+    # Convert weights to dict if pandas Series
+    if hasattr(weights, 'to_dict'):
+        weights = weights.to_dict()
+
     if not weights:
         raise ValueError("weights cannot be empty")
 

@@ -1,12 +1,11 @@
-# Contributing to Black-Litterman View Generation MCP
+# Contributing to Black-Litterman MCP
 
-프로젝트에 기여해주셔서 감사합니다! 이 문서는 프로젝트를 처음 접하는 분들을 위한 가이드입니다.
+프로젝트에 기여해주셔서 감사합니다!
 
 ## 목차
 
-- [프로젝트 개요](#프로젝트-개요)
 - [개발 환경 설정](#개발-환경-설정)
-- [데이터 준비](#데이터-준비)
+- [프로젝트 구조](#프로젝트-구조)
 - [개발 워크플로우](#개발-워크플로우)
 - [테스트](#테스트)
 - [코드 스타일](#코드-스타일)
@@ -14,35 +13,24 @@
 
 ---
 
-## 프로젝트 개요
-
-Black-Litterman 포트폴리오 최적화를 MCP(Model Context Protocol) 서버로 구현한 프로젝트입니다.
-
-### 핵심 구조
+## 프로젝트 구조
 
 ```
 bl_mcp/               # MCP 서버 코드
-├── server.py         # FastMCP 서버 (@mcp.tool 1개)
-├── tools.py          # 핵심 로직 (optimize_portfolio_bl)
+├── server.py         # FastMCP 서버
+├── tools.py          # 핵심 로직
 └── utils/            # 유틸리티
     ├── data_loader.py
     ├── validators.py
     └── session.py
 
+bl_agent/             # Google ADK Agent
 scripts/              # 데이터 다운로드 스크립트
-├── download_data.py
-└── download_sp500.py
-
 tests/                # 테스트
-├── test_simple.py    # 6개 테스트 시나리오
-└── test_agent.py
+docs/                 # 기술 문서
 ```
 
-### 구현된 도구 (Phase 1)
-
-**Single Tool 설계** - LLM 토큰 효율성을 위해 1개 Tool로 통합
-
-- `optimize_portfolio_bl` - Black-Litterman 최적화 (유일한 MCP Tool)
+자세한 아키텍처는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) 참고
 
 ---
 
@@ -397,32 +385,16 @@ gh release download data-v1.1 -p "data.tar.gz" --clobber
 
 ## 추가 자료
 
-### 프로젝트 문서
-
-- [README.md](README.md) - 프로젝트 개요
-- [QUICKSTART.md](QUICKSTART.md) - 5분 시작 가이드
-- [TESTING.md](TESTING.md) - 테스트 가이드
-- [WINDSURF_SETUP.md](WINDSURF_SETUP.md) - Windsurf 연동
-
-### 컨텍스트 문서
-
-- `CLAUDE.md` - Claude Code 자동 컨텍스트 (핵심)
-- `memory-bank/activeContext.md` - 현재 작업 상태
-- `memory-bank/progress.md` - 진행 상황
-- `memory-bank/systemPatterns.md` - 아키텍처
-
-### Reference 자료
-
-- `reference/PyPortfolioOpt/cookbook/2-black-litterman.ipynb` - BL 모델 예제
-- `reference/fastmcp/examples/` - FastMCP 사용 예제
-- `reference/Idzorek_onBL.pdf` - Black-Litterman 이론
+| 문서 | 설명 |
+|------|------|
+| [README.md](README.md) | 프로젝트 개요 |
+| [QUICKSTART.md](QUICKSTART.md) | 5분 시작 가이드 |
+| [TESTING.md](TESTING.md) | 테스트 가이드 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 기술 아키텍처 |
+| [docs/WINDSURF_SETUP.md](docs/WINDSURF_SETUP.md) | Windsurf 연동 |
 
 ---
 
 ## 질문이나 도움이 필요하신가요?
 
-- **Issue**: [GitHub Issues](https://github.com/irresi/bl-view-mcp/issues)
-- **Documentation**: 프로젝트 루트의 `*.md` 파일들 참고
-- **Memory Bank**: 설계 결정과 컨텍스트 확인
-
-**Happy Contributing! 🚀**
+[GitHub Issues](https://github.com/irresi/bl-view-mcp/issues)

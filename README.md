@@ -1,24 +1,31 @@
 # Black-Litterman Portfolio Optimization MCP Server
-![alt text](./docs/image.png)
-![alt text](./docs/image2.png)
-이 프로젝트는 **Black-Litterman 포트폴리오 최적화**를 **Model Context Protocol (MCP)** 서버로 제공합니다.
+
+![Claude Desktop Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image.png)
+![Web UI Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image2.png)
+
+AI 에이전트를 위한 **Black-Litterman 포트폴리오 최적화** MCP 서버입니다.
 
 Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.
 
-## ✅ 구현 완료 (Phase 1)
+## 주요 기능
 
-- 🎯 **Single MCP Tool** (`optimize_portfolio_bl`) - LLM 토큰 효율성 최적화
-- 📊 **PyPortfolioOpt** 통합 (Idzorek confidence 방법)
-- 🚀 **FastMCP** 서버 (stdio + HTTP 듀얼 모드)
-- 🧪 **3가지 테스트 방법** (Direct, Agent, Web UI)
-- 📦 **자동 데이터 다운로드** (GitHub Release → Parquet)
+- **포트폴리오 최적화** - Black-Litterman 모델 기반 최적 비중 계산
+- **투자자 견해 반영** - "AAPL이 10% 오를 것", "NVDA가 MSFT보다 나을 것" 등
+- **백테스팅** - 과거 데이터로 전략 검증
+- **다양한 자산** - S&P 500, NASDAQ 100, ETF, 암호화폐 지원
 
 ---
 
-## 🚀 Quick Start
+## 빠른 시작
 
 ### 1. 설치
 
+**PyPI (권장)**:
+```bash
+pip install black-litterman-mcp
+```
+
+**소스에서 설치**:
 ```bash
 git clone https://github.com/irresi/bl-view-mcp.git
 cd bl-view-mcp
@@ -27,818 +34,157 @@ make install
 
 ### 2. 데이터 다운로드
 
-> ⚠️ **중요**: MCP 서버 시작 **전에** 데이터를 미리 다운로드하세요!
->
-> stdio 모드에서 첫 실행 시 자동 다운로드가 30초 이상 걸리면 LLM이 타임아웃으로 연결을 종료할 수 있습니다.
-
 ```bash
-# 권장: 서버 시작 전에 미리 다운로드
 make download-data      # S&P 500 (~500 종목)
-
-# 추가 데이터셋 (선택)
-make download-nasdaq100 # NASDAQ 100 (~100 종목)
-make download-etf       # ETF (~130 종목)
-make download-crypto    # Crypto (100 심볼, --extra crypto 필요)
 ```
 
-**요구사항**: [GitHub CLI](https://cli.github.com/) 필요 (`brew install gh`)
+> ⚠️ **중요**: 서버 시작 전에 데이터를 미리 다운로드하세요. 그렇지 않으면 첫 실행 시 30초 이상 걸릴 수 있습니다.
 
-**대안** (소스에서 직접 다운로드):
+**추가 데이터셋** (선택):
 ```bash
-make data-snp500    # yfinance에서 직접 다운로드 (느림)
-make sample         # 샘플 3종목만 (AAPL, MSFT, GOOGL)
+make download-nasdaq100 # NASDAQ 100
+make download-etf       # ETF (~130 종목)
+make download-crypto    # 암호화폐 (100 심볼)
 ```
 
 ### 3. 테스트
 
 ```bash
-# 기본 테스트 (빠름)
 make test-simple
-
-# bl_agent 날짜 처리 테스트 (서버 필요)
-make test-agent-dates
-
-# 모든 테스트
-make test-all
-```
-
-**예상 출력** (test-simple):
-```
-✅ Success!
-📊 Portfolio Weights:
-  AAPL: 33.33%
-  MSFT: 33.33%
-  GOOGL: 33.33%
-```
-
-**bl_agent 날짜 테스트** (`test-agent-dates`):
-- bl_agent가 "최근 1년", "지난 3개월" 같은 자연어를 표준 포맷(`1Y`, `3M`)으로 변환하는지 검증
-- 9가지 시나리오: 한국어/영어, 상대/절대 날짜, 분기(Q1-Q4), YTD
-- 상세 가이드: [tests/DATE_TESTING_GUIDE.md](tests/DATE_TESTING_GUIDE.md)
-
-### 4. 서버 실행
-
-```bash
-# HTTP 모드 (ADK Agent, Web UI)
-make server-http
-
-# stdio 모드 (Windsurf, Claude Desktop)
-make server-stdio
-```
-
-📚 **상세 가이드**: [QUICKSTART.md](QUICKSTART.md) | [CONTRIBUTING.md](CONTRIBUTING.md)
-
----
-
-## 목표
-
-베이지안 통계 모델 기반 포트폴리오 최적화 MCP 서버 구축
-
-- Prior: 시가총액 가중 포트폴리오
-- Likelihood: Tool로 제공되는 기대수익률 계산 기능
-
-## 핵심 아이디어
-
-블랙-리터만 모델을 MCP 서버로 구현하여 AI가 포트폴리오 최적화를 수행할 수 있도록 함
-
-- **Prior (사전 분포)**: 시가총액 가중 포트폴리오 - 시장의 균형 상태를 반영
-- **Likelihood (우도)**: MCP Tools - 사용자/AI가 투자 견해를 입력하여 포트폴리오 업데이트
-
----
-
-## 아키텍처
-
-### 전송 방식 (Transport Modes)
-
-FastMCP는 두 가지 전송 방식을 지원하여 다양한 클라이언트와 연동 가능합니다:
-
-#### 1. **stdio 모드** (개발 & 일반 사용)
-- **용도**: Claude Desktop, Windsurf, Cline 등 MCP 지원 IDE
-- **장점**: 간편한 설정, 빠른 개발/테스트
-- **설정**: IDE의 MCP 서버 설정 파일에 등록
-
-```
-Tools → FastMCP Server (stdio) → Windsurf/Claude Desktop
-```
-
-#### 2. **HTTP 모드** (프로덕션 & 고급 사용)
-- **용도**: Google ADK Agent, 웹 서비스 통합
-- **장점**: 네트워크 접근, 멀티 클라이언트, 디버깅 용이
-- **설정**: HTTP 엔드포인트로 연결
-
-```
-Tools → FastMCP Server (HTTP) → ADK Agent (Gemini)
 ```
 
 ---
 
-## MCP Server 구조
+## 사용 방법
 
-### 1. Tool: `optimize_portfolio_bl`
+### Claude Desktop / Windsurf IDE
 
-**유일한 MCP Tool** - LLM이 불필요하게 중간 단계를 호출하지 않도록 단일 Tool로 설계
-
-**목적**: Black-Litterman 모델로 최적 포트폴리오 계산
-
-**날짜 범위 옵션** (상호 배타적):
-- `period` (권장): 상대 기간 ("1Y", "3M", "1W" 등)
-- `start_date`: 절대 날짜 ("2023-01-01")
-- 둘 다 없으면 기본값 "1Y" (1년)
-
-**입력**:
-- `tickers`: List[str] - 티커 심볼 리스트 (순서 유지됨)
-- `period`: Optional[str] - 상대 기간 ("1D", "7D", "1W", "1M", "3M", "6M", "1Y", "2Y", "5Y")
-- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD" (period 대신 사용)
-- `end_date`: Optional[str] - 종료 날짜 "YYYY-MM-DD" (기본값: 오늘)
-- `market_caps`: Optional[Dict[str, float]] - 시가총액 (선택, 기본값: equal weight)
-- `views`: Optional[Dict] - **P, Q 형식만 지원** (아래 예시 참고)
-- `confidence`: Optional[float | list] - 견해 확신도 (0.0~1.0)
-  - `float`: 모든 뷰에 동일한 confidence 적용
-  - `list`: 뷰별로 다른 confidence 적용 (예: `[0.9, 0.6]`)
-  - 기본값: 0.5 (중립)
-- `investment_style`: str - "aggressive", "balanced", "conservative" (기본값: "balanced")
-- `risk_aversion`: Optional[float] - 위험 회피 계수 (선택, 자동 계산)
-
-**Views 형식 (P, Q)**:
-
-```python
-# 1. Absolute View (단일 자산)
-views = {"P": [{"AAPL": 1}], "Q": [0.10]}  # AAPL 10% 수익 예상
-
-# 2. Relative View (자산 간 비교)
-views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}  # NVDA가 AAPL보다 20% 아웃퍼폼
-
-# 3. Multiple Views
-views = {
-    "P": [{"NVDA": 1, "AAPL": -1}, {"GOOGL": 1}],
-    "Q": [0.25, 0.12]
-}
-confidence = [0.9, 0.6]  # 뷰별 confidence
-
-# 4. NumPy Format (고급)
-views = {"P": [[1, -1, 0]], "Q": [0.20]}  # 인덱스 기반
-```
-
-**출력**:
+`claude_desktop_config.json` 또는 `.windsurf/mcp_config.json`에 추가:
 
 ```json
 {
-  "success": true,
-  "weights": {"AAPL": 0.33, "MSFT": 0.33, "GOOGL": 0.33},
-  "expected_return": 0.12,
-  "volatility": 0.23,
-  "sharpe_ratio": 0.52,
-  "posterior_returns": {"AAPL": 0.15, "MSFT": 0.12, "GOOGL": 0.11},
-  "prior_returns": {"AAPL": 0.14, "MSFT": 0.13, "GOOGL": 0.12},
-  "risk_aversion": 2.5,
-  "has_views": true,
-  "period": {"start": "2024-01-01", "end": "2025-01-01", "days": 252}
-}
-```
-
-### 2. Tool: `backtest_portfolio` (NEW - Phase 2)
-
-**목적**: 포트폴리오 백테스팅으로 전략 검증
-
-**입력**:
-- `tickers`: List[str] - 티커 심볼 리스트
-- `weights`: Dict[str, float] - 포트폴리오 비중 (optimize_portfolio_bl 결과 사용 가능)
-- `period`: Optional[str] - 상대 기간 ("1Y", "3Y", "5Y" 등)
-- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD"
-- `strategy`: str - 전략 프리셋
-  - `"buy_and_hold"`: 매입 후 보유 (리밸런싱 없음)
-  - `"passive_rebalance"`: 월별 리밸런싱 (DEFAULT)
-  - `"risk_managed"`: 월별 리밸런싱 + 10% 손절매 + 20% MDD 한도
-- `benchmark`: Optional[str] - 벤치마크 (기본: "SPY")
-- `initial_capital`: float - 초기 자본 (기본: 10000)
-- `custom_config`: Optional[Dict] - 고급 설정 (strategy 오버라이드)
-
-**출력**:
-```json
-{
-  "total_return": 0.25,
-  "cagr": 0.12,
-  "volatility": 0.18,
-  "sharpe_ratio": 0.67,
-  "sortino_ratio": 0.85,
-  "max_drawdown": -0.15,
-  "calmar_ratio": 0.80,
-  "initial_capital": 10000.0,
-  "final_value": 12500.0,
-  "benchmark_return": 0.20,
-  "excess_return": 0.05,
-  "alpha": 0.03,
-  "beta": 0.95,
-  "holding_periods": {"AAPL": {"days": 730, "is_long_term": true}}
-}
-```
-
-**사용 예시**:
-```python
-# Step 1: 포트폴리오 최적화
-bl_result = optimize_portfolio_bl(
-    tickers=["AAPL", "MSFT", "GOOGL"],
-    period="1Y"
-)
-
-# Step 2: 백테스트
-backtest_result = backtest_portfolio(
-    tickers=["AAPL", "MSFT", "GOOGL"],
-    weights=bl_result["weights"],
-    period="3Y",
-    strategy="passive_rebalance"
-)
-```
-
-### 3. 계획된 Tools
-
-| Tool | 상태 | 설명 |
-|------|------|------|
-| `optimize_portfolio_bl` | ✅ 완료 | BL 포트폴리오 최적화 |
-| `backtest_portfolio` | ✅ 완료 | 포트폴리오 백테스팅 |
-| `calculate_hrp_weights` | 🆕 선택사항 | HRP 최적화 (BL 대안) |
-
-**프로젝트 분리 결정** (2025-11-23):
-- **bl-mcp**: MCP Tool만 제공 (순수 라이브러리)
-- **bl-orchestrator**: Multi-agent view generation (별도 프로젝트, CrewAI)
-
----
-
-## 프로젝트 구조
-
-```
-├── pyproject.toml              # 프로젝트 설정 및 의존성
-├── CLAUDE.md                   # Claude Code 자동 컨텍스트
-├── bl_mcp/                     # MCP 서버 패키지
-│   ├── server.py               # FastMCP 서버 (@mcp.tool 1개)
-│   ├── tools.py                # 핵심 로직 (optimize_portfolio_bl)
-│   └── utils/
-│       ├── data_loader.py      # Parquet → DataFrame
-│       └── validators.py       # 입력 검증
-├── bl_agent/                   # ADK Agent 패키지
-│   ├── agent.py                # Google ADK Agent
-│   └── prompt.py               # Agent 프롬프트
-├── start_stdio.py              # stdio 모드 (Windsurf용)
-├── start_http.py               # HTTP 모드 (ADK Agent용)
-├── tests/
-│   └── test_simple.py          # 6개 테스트 시나리오
-└── data/                       # Parquet 데이터 (503개 종목)
-```
-
----
-
-## 구현 단계
-
-### Phase 1: MCP 서버 MVP (Black-Litterman Core)
-
-**목표**: FastMCP를 사용하여 핵심 라이브러리(**`PyPortfolioOpt`**)를 AI가 사용할 수 있도록 MCP Tools로 노출합니다.
-
-- [X] **데이터 수집 파이프라인** ✅
-  - [X] `scripts/download_data.py` - 개별 종목 다운로드 (yfinance → Parquet)
-  - [X] `scripts/download_sp500.py` - S&P 500 전체 다운로드 (503개 종목)
-  - [X] `bl_mcp/utils/session.py` - HTTP 세션 관리 (랜덤 User-Agent, Retry)
-  
-  **사용법**:
-  ```bash
-  # 개별 종목 다운로드
-  uv run python scripts/download_data.py AAPL MSFT GOOGL --start 2023-01-01
-  
-  # S&P 500 전체 다운로드 (상장일부터 전체 히스토리)
-  uv run python scripts/download_sp500.py
-  
-  # 일부만 테스트
-  uv run python scripts/download_sp500.py --limit 10
-  ```
-
-- [ ] **프로젝트 설정**
-  - [ ] `pyproject.toml` 작성
-    ```toml
-    [project]
-    name = "black-litterman-mcp"
-    version = "0.1.0"
-    requires-python = ">=3.11"
-    dependencies = [
-        "fastmcp==2.13.0.1",
-        "PyPortfolioOpt>=1.5.5",
-        "pandas>=2.0.0",
-        "numpy>=1.24.0",
-        "yfinance>=0.2.0",
-        "python-dotenv>=1.0.0",
-    ]
-    
-    [project.optional-dependencies]
-    agent = [
-        "google-adk[a2a]==1.14.1",
-        "google-genai>=1.38.0",
-    ]
-    ```
-  - [ ] 패키지 구조 생성 (`bl_mcp/`, `bl_agent/`)
-  - [ ] 의존성 설치: `uv sync` 또는 `pip install -e .`
-
-- [ ] **데이터 로더 구현** (`bl_mcp/utils/data_loader.py`)
-  - [ ] Parquet 파일 읽기 함수
-  - [ ] 날짜 범위 필터링
-  - [ ] 결측치 처리
-  - [ ] 수익률 계산 유틸리티
-
-- [ ] **입력 검증 구현** (`bl_mcp/utils/validators.py`)
-  - [ ] 티커 유효성 검증
-  - [ ] 날짜 범위 검증 (start_date <= end_date)
-  - [ ] 데이터 충분성 검증 (최소 데이터 포인트)
-  - [ ] 공분산 행렬 singular 체크
-  - [ ] 최적화 파라미터 검증
-
-- [ ] **핵심 Tools 로직 구현** (`bl_mcp/tools.py`)
-  
-  각 함수는 순수 Python 로직으로 구현하며, `Dict[str, Any]` 형식으로 결과를 반환합니다.
-  
-  - [ ] **Tool 1.1**: `calculate_expected_returns`
-    - 라이브러리: `PyPortfolioOpt.expected_returns`
-    - 지원 방법: `mean_historical_return`, `ema_historical_return`, `capm_return`
-    - 입력: tickers, start_date, end_date, lookback_days, method
-    - 출력: `{"success": True, "tickers": [...], "expected_returns": {...}, ...}`
-  
-  - [ ] **Tool 1.2**: `calculate_covariance_matrix`
-    - 라이브러리: `PyPortfolioOpt.risk_models`
-    - 지원 방법: `sample_cov`, `ledoit_wolf`, `exp_cov`, `semicovariance`
-    - 입력: tickers, start_date, end_date, lookback_days, method
-    - 출력: `{"success": True, "covariance_matrix": {...}, ...}`
-  
-  - [ ] **Tool 1.3**: `create_investor_view`
-    - 자체 구현 (view_dict → P, Q, Omega 변환 래퍼)
-    - Omega 계산: confidence 기반 자동 계산 (omega = (1 - confidence) * variance)
-    - 입력: portfolio_tickers, view_dict, expected_return, confidence
-    - 출력: `{"success": True, "view_id": "...", "P_row": {...}, "Q_value": ..., ...}`
-  
-  - [ ] **Tool 1.4**: `optimize_portfolio_bl`
-    - 라이브러리: `PyPortfolioOpt.black_litterman.BlackLittermanModel`
-    - **중요**: Tool 1.1, 1.2의 출력을 입력으로 받음 (모듈형 설계)
-    - Prior 계산: market_cap weighted (시가총액 기반)
-    - 제약 조건: long_only, max_weight 지원
-    - 입력: tickers, expected_returns, covariance_matrix, views, prior_type, risk_aversion, tau
-    - 출력: `{"success": True, "posterior_weights": {...}, "portfolio_return": ..., ...}`
-
-- [ ] **FastMCP 서버 구현** (`bl_mcp/server.py`)
-  
-  FastMCP의 `@mcp.tool` 데코레이터를 사용하여 tools.py의 함수를 MCP Tools로 노출합니다.
-  
-  ```python
-  from fastmcp import FastMCP
-  from . import tools
-  
-  mcp = FastMCP("black-litterman-portfolio")
-  
-  @mcp.tool
-  def calculate_expected_returns(
-      tickers: list[str],
-      start_date: str,
-      end_date: str | None = None,
-      lookback_days: int | None = None,
-      method: str = "historical_mean",
-      data_type: str = "stock"
-  ) -> dict:
-      """
-      Calculate expected returns for assets.
-      
-      Args:
-          tickers: List of ticker symbols
-          start_date: Start date in 'YYYY-MM-DD' format
-          end_date: End date (default: today)
-          lookback_days: Lookback period (mutually exclusive with start_date)
-          method: Calculation method ('historical_mean', 'capm', etc.)
-          data_type: Data type ('stock', 'etf', 'crypto')
-      
-      Returns:
-          Dictionary with expected returns
-      """
-      return tools.calculate_expected_returns(
-          tickers, start_date, end_date, lookback_days, method, data_type
-      )
-  
-  # Tool 1.2, 1.3, 1.4도 동일한 패턴으로 구현
-  ```
-
-- [ ] **실행 스크립트 작성**
-  
-  - [ ] `start_stdio.py` (Windsurf/Claude Desktop용)
-    ```python
-    from bl_mcp.server import mcp
-    
-    if __name__ == "__main__":
-        mcp.run(transport="stdio")
-    ```
-  
-  - [ ] `start_http.py` (ADK Agent용)
-    ```python
-    from bl_mcp.server import mcp
-    
-    if __name__ == "__main__":
-        mcp.run(transport="http", host="localhost", port=5000)
-    ```
-
-- [ ] **Windsurf MCP 설정**
-  
-  `.windsurf/mcp_config.json` 또는 Windsurf 설정에 추가:
-  ```json
-  {
-    "mcpServers": {
-      "black-litterman": {
-        "command": "python",
-        "args": ["/absolute/path/to/start_stdio.py"],
-        "env": {}
-      }
+  "mcpServers": {
+    "bl-view-mcp": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/bl-view-mcp", "run", "bl-view-mcp"]
     }
   }
-  ```
+}
+```
 
-- [ ] **기본 테스트** (stdio 모드)
-  - [ ] MCP 서버 등록 확인
-  - [ ] Windsurf에서 Tools 목록 확인
-  - [ ] **시나리오 1: 기본 포트폴리오 최적화** 실행
-  - [ ] 결과 검증 및 디버깅
+그 후 AI에게 요청:
 
----
+> "AAPL, MSFT, GOOGL로 포트폴리오를 최적화해줘. AAPL이 10% 수익을 낼 것 같아."
 
-### Phase 2: 백테스팅 및 HRP (범위 축소됨)
+### Web UI (테스트용)
 
-**목표**: 백테스팅 기능을 추가하여 전략을 검증하고, HRP를 BL 대안으로 제공합니다.
+```bash
+# 터미널 1: MCP 서버
+make server-http
 
-**프로젝트 분리 결정** (2025-11-23):
-- View generation 기능은 별도 프로젝트 (`bl-orchestrator`)로 분리
-- 이 프로젝트는 순수 MCP Tool 라이브러리로 유지
+# 터미널 2: Web UI
+make web-ui
+```
 
-- [ ] **Tool 1.5**: `backtest_portfolio`
-  - 백테스팅 엔진: pandas + empyrical (또는 VectorBT)
-  - 성과 지표: Total Return, Sharpe, Max Drawdown, Alpha, Beta
-  - 리밸런싱: none, monthly, quarterly, yearly
-  - 벤치마크: SPY (기본)
+브라우저에서 http://localhost:8000 접속
 
-- [ ] **Tool 1.6**: `calculate_hrp_weights` (선택사항)
-  - 라이브러리: `PyPortfolioOpt.hierarchical_portfolio.HRPOpt`
-  - 용도: Views 없이 분산 투자하고 싶을 때 BL 대안
+### Docker
 
-**제외됨** (bl-orchestrator로 이동):
-- ~~`get_market_data`~~ - LLM이 직접 필요 없음
-- ~~`calculate_factor_scores`~~ - Multi-agent debate로 대체
-- ~~View generation tools~~ - LLM reasoning으로 대체
-
-- [ ] **테스트**
-  - [ ] backtest_portfolio 기본 테스트
-  - [ ] HRP vs BL 비교 테스트
+```bash
+docker build -t bl-mcp .
+docker run -p 5000:5000 -v $(pwd)/data:/app/data bl-mcp
+```
 
 ---
 
-### Phase 3: 데이터 확장 및 배포
+## MCP 도구
 
-**목표**: 데이터 소스를 확장하고 프로젝트를 공개합니다.
+### `optimize_portfolio_bl`
 
-- [ ] **데이터 소스 확장: 한국 주식**
+Black-Litterman 모델로 최적 포트폴리오 비중을 계산합니다.
 
-  - [ ] `pykrx` 또는 `FinanceDataReader` 통합
-  - [ ] KRX 티커 형식 처리 (예: 005930.KS)
-  - [ ] 한국 시장 특화 팩터 (예: 외국인 보유율)
-- [ ] **데이터 소스 확장: 암호화폐**
+```python
+optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    period="1Y",
+    views={"P": [{"AAPL": 1}], "Q": [0.10]},  # AAPL 10% 수익 예상
+    confidence=0.7,
+    investment_style="balanced"  # aggressive / balanced / conservative
+)
+```
 
-  - [ ] **`ccxt`** 라이브러리 통합
-  - [ ] 주요 거래소 지원 (Binance, Upbit 등)
-  - [ ] 24/7 시장 특성 반영
-- [ ] **데이터 소스 확장: 실시간 데이터**
+**Views 예시**:
+```python
+# 절대 견해: "AAPL이 10% 오를 것"
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}
 
-  - [ ] 실시간 데이터 API 연동 (WebSocket 또는 유료 API)
-  - [ ] 캐싱 전략 구현 (API 호출 최소화)
-- [ ] **고급 모델링 (선택 사항)**
+# 상대 견해: "NVDA가 AAPL보다 20% 더 나을 것"
+views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+```
 
-  - [ ] 엔트로피 풀링(Entropy Pooling) 구현
-  - [ ] 다중 견해 통합 방법론
-  - [ ] 동적 리밸런싱 전략
+### `backtest_portfolio`
 
-- [ ] **배포 및 문서화**
+포트폴리오 전략을 과거 데이터로 검증합니다.
 
-  - [ ] PyPI 패키지 등록 (`pip install black-litterman-mcp`)
-  - [ ] GitHub 저장소 공개
-  - [ ] README.md 업데이트
-    - 설치 방법
-    - Windsurf/Claude Desktop 연동 가이드
-    - 사용 예시 및 튜토리얼
-    - FastMCP stdio/HTTP 모드 설명
-  - [ ] 라이선스 선택 (MIT 권장)
+```python
+backtest_portfolio(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    weights={"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25},
+    period="3Y",
+    strategy="passive_rebalance",  # buy_and_hold / passive_rebalance / risk_managed
+    benchmark="SPY"
+)
+```
+
+### `list_available_tickers`
+
+사용 가능한 티커 목록을 조회합니다.
+
+```python
+list_available_tickers(search="AAPL")  # 검색
+list_available_tickers(limit=50)        # 상위 50개
+```
 
 ---
 
-### Phase 4: ADK Agent 통합 (선택사항 - 고급)
+## 문서
 
-**목표**: Google ADK Agent를 사용하여 Gemini 기반 자동화 워크플로우를 구축합니다.
-
-- [ ] **ADK Agent 구현** (`bl_agent/agent.py`)
-  ```python
-  from google.adk.agents.llm_agent import Agent
-  from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
-  from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
-  from .prompt import DESCRIPTION, INSTRUCTION
-  
-  root_agent = Agent(
-      model="gemini-2.5-flash",
-      name="portfolio_optimizer",
-      description=DESCRIPTION,
-      instruction=INSTRUCTION,
-      tools=[
-          MCPToolset(
-              connection_params=StreamableHTTPConnectionParams(
-                  url="http://localhost:5000/mcp"
-              )
-          )
-      ]
-  )
-  ```
-
-- [ ] **Agent 프롬프트 작성** (`bl_agent/prompt.py`)
-  ```python
-  DESCRIPTION = """
-  블랙-리터만 모델 기반 포트폴리오 최적화 전문 에이전트입니다.
-  사용자의 투자 목표와 견해를 반영하여 최적의 포트폴리오를 생성합니다.
-  """
-  
-  INSTRUCTION = """
-  당신은 포트폴리오 최적화 전문가입니다.
-  
-  # 주요 기능
-  1. 기대수익률 계산 (히스토리컬, CAPM, 팩터 모델)
-  2. 공분산 행렬 계산 (샘플, Ledoit-Wolf, 축소 추정)
-  3. 투자자 견해 생성 (상대적/절대적 견해)
-  4. 블랙-리터만 포트폴리오 최적화
-  5. 포트폴리오 백테스팅 및 성과 분석
-  
-  # 작업 방식
-  1. 사용자의 투자 목표와 제약 조건을 파악
-  2. 적절한 데이터 기간과 방법론 선택
-  3. 단계별로 최적화 수행 (기대수익률 → 공분산 → 견해 → 최적화)
-  4. 결과를 명확하게 설명하고 시각화
-  5. 백테스팅으로 전략 검증
-  
-  # 주의사항
-  - 항상 날짜 형식은 'YYYY-MM-DD' 사용
-  - 데이터가 충분한지 확인 (최소 60일 이상 권장)
-  - 견해의 확신도를 현실적으로 설정 (0.5~0.8 권장)
-  - 과도한 집중을 피하기 위해 max_weight 설정 고려
-  """
-  ```
-
-- [ ] **Agent 테스트 스크립트**
-  ```python
-  # test_agent.py
-  from bl_agent.agent import root_agent
-  
-  # HTTP 서버 먼저 실행: python start_http.py
-  
-  response = root_agent.execute(
-      "AAPL, MSFT, GOOGL, AMZN으로 구성된 포트폴리오를 최적화해줘. "
-      "최근 1년 데이터를 사용하고, 시가총액 가중 prior를 적용해. "
-      "AAPL이 MSFT보다 5% 더 높은 수익을 낼 것으로 예상해."
-  )
-  print(response)
-  ```
-
-- [ ] **고급 워크플로우**
-  - [ ] 멀티 에이전트 시스템 (데이터 분석 + 최적화 + 백테스팅)
-  - [ ] 자동 리밸런싱 시스템
-  - [ ] 알림 및 리포트 생성
+| 문서 | 설명 |
+|------|------|
+| [QUICKSTART.md](QUICKSTART.md) | 5분 시작 가이드 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 개발자 가이드 |
+| [TESTING.md](TESTING.md) | 테스트 가이드 |
+| [docs/WINDSURF_SETUP.md](docs/WINDSURF_SETUP.md) | Windsurf IDE 설정 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 기술 아키텍처 |
 
 ---
 
 ## 기술 스택
 
-### 데이터
-
-- **주식/ETF**: yfinance (무료, 제한적)
-- **암호화폐**: ccxt (무료)
-- **한국 주식**: pykrx 또는 FinanceDataReader (무료, 제한적)
-
-### 모델
-
-- **블랙-리터만**: PyPortfolioOpt.black_litterman
-- **HRP**: PyPortfolioOpt.hierarchical_portfolio
-- **팩터 모델**: 자체 구현 (data.py 재사용)
-  - 보조 라이브러리: `pandas-ta` (기술적 지표), `TA-Lib` (고급 지표)
-  - 재무 데이터: `yfinance.Ticker.info` (펀더멘탈 팩터)
-  - 통계: `scipy.stats` (순위 계산, 정규화)
-- **기대수익률**: PyPortfolioOpt.expected_returns
-- **공분산**: PyPortfolioOpt.risk_models
-
-### 백테스팅 및 성과 분석
-
-- **포트폴리오 백테스팅**: VectorBT (다중 자산, 리밸런싱 지원) 또는 직접 구현
-- **성과 지표**: empyrical (Sharpe, Alpha, Beta, Sortino, Calmar, Max Drawdown 등)
-- **기술적 지표**: pandas-ta 또는 TA-Lib (선택사항)
-- 참고: Backtesting.py는 개별 종목 전략용
-
-### MCP 및 Agent 프레임워크
-
-- **MCP 서버**: FastMCP 2.13.0.1
-  - 간결한 API (`@mcp.tool` 데코레이터)
-  - stdio/HTTP 전송 모드 지원
-  - 타입 안전성 (Python type hints 자동 변환)
-  
-- **Agent (선택사항)**: Google ADK 1.14.1
-  - Gemini 2.5 Flash LLM
-  - MCP 네이티브 통합 (MCPToolset)
-  - 프롬프트 관리 (instruction/description)
-  
-- **통신 방식**:
-  - **stdio**: Windsurf, Claude Desktop, Cline 등
-  - **HTTP**: ADK Agent, 웹 서비스 통합
-  
-- **배포**: PyPI 패키지 또는 Docker
+- **MCP 서버**: [FastMCP](https://github.com/jlowin/fastmcp)
+- **최적화**: [PyPortfolioOpt](https://github.com/robertmartin8/PyPortfolioOpt)
+- **데이터**: yfinance, ccxt (암호화폐)
 
 ---
 
-## 사용 시나리오
+## 라이선스
 
-### 시나리오 1: 기본 포트폴리오 최적화
-
-```python
-# AI가 MCP tools를 호출
-1. get_market_data(
-     tickers=["AAPL", "MSFT", "GOOGL", "AMZN"],
-     lookback_days=365,  # 최근 1년 데이터
-     fields=["Close", "market_cap", "sector"]
-   )
-2. calculate_expected_returns(
-     tickers=tickers,
-     start_date="2023-01-01",
-     end_date="2024-01-01"
-   )
-3. calculate_covariance_matrix(
-     tickers=tickers,
-     start_date="2023-01-01",
-     end_date="2024-01-01"
-   )
-4. create_investor_view(
-     view_type="relative",
-     tickers=["AAPL", "MSFT"],
-     coefficients=[1, -1],
-     expected_return=0.05,
-     confidence=0.7
-   )
-5. optimize_portfolio_bl(
-     tickers=tickers,
-     prior_type="market_cap",
-     views=[view1],
-     risk_aversion=2.5
-   )
-```
-
-### 시나리오 2: 팩터 기반 전략
-
-```python
-1. calculate_factor_scores(
-     tickers=sp500_tickers,
-     lookback_days=252,  # 최근 1년 (거래일 기준)
-     factors=["value", "momentum", "quality"],
-     factor_weights={"value": 0.4, "momentum": 0.3, "quality": 0.3}
-   )
-2. # 상위 20개 종목 선택
-3. optimize_portfolio_bl(
-     tickers=top_20,
-     prior_type="equal_weight",
-     views=[]  # 팩터 스코어가 이미 반영됨
-   )
-4. backtest_portfolio(
-     weights=weights,
-     start_date="2020-01-01",
-     end_date="2024-01-01"
-   )
-```
-
-### 시나리오 3: HRP + 블랙-리터만
-
-```python
-1. calculate_hrp_weights(
-     tickers=etf_tickers,
-     lookback_days=1095  # 최근 3년
-   )
-2. create_investor_view(...)  # 저변동성 ETF 선호
-3. optimize_portfolio_bl(
-     tickers=etf_tickers,
-     prior_type="hrp",
-     prior_weights=hrp_weights,
-     views=[view1]
-   )
-```
+MIT License - [LICENSE](LICENSE)
 
 ---
 
-## 차별화 포인트
+## 문제 해결
 
-1. **베이지안 접근**: Prior(시가총액) + Likelihood(AI 견해) = Posterior(최적 포트폴리오)
-2. **AI 친화적**: MCP 프로토콜로 AI가 직접 포트폴리오 최적화 수행
-3. **모듈화**: 각 단계(데이터, 모델, 백테스트)를 독립적인 Tool로 제공
-4. **유연성**: stdio/HTTP 두 가지 전송 모드 지원
-   - **개발**: Windsurf에서 직접 사용
-   - **프로덕션**: ADK Agent로 자동화
-5. **확장성**: 주식 → ETF → 암호화폐 → 채권으로 점진적 확장
-6. **투명성**: 각 단계의 중간 결과를 명확히 반환
-7. **현대적**: FastMCP로 간결하고 타입 안전한 구현
-
----
-
-## 설치 및 사용
-
-### 설치
-
+### "Data file not found"
 ```bash
-# 저장소 클론
-git clone https://github.com/yourusername/black-litterman-mcp.git
-cd black-litterman-mcp
-
-# 의존성 설치 (uv 사용 권장)
-uv sync
-
-# 또는 pip 사용
-pip install -e .
-
-# ADK Agent 사용 시 (선택사항)
-pip install -e ".[agent]"
+make download-data
 ```
 
-### stdio 모드 (Windsurf/Claude Desktop)
-
-**1. MCP 서버 설정**
-
-Windsurf의 경우 `.windsurf/mcp_config.json`:
-```json
-{
-  "mcpServers": {
-    "black-litterman": {
-      "command": "python",
-      "args": ["/absolute/path/to/start_stdio.py"],
-      "env": {}
-    }
-  }
-}
-```
-
-Claude Desktop의 경우 `claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "black-litterman": {
-      "command": "python",
-      "args": ["/absolute/path/to/start_stdio.py"]
-    }
-  }
-}
-```
-
-**2. IDE에서 사용**
-
-Windsurf나 Claude Desktop을 재시작하면 MCP Tools가 자동으로 로드됩니다.
-
-```
-> "AAPL, MSFT, GOOGL로 포트폴리오를 최적화해줘. 최근 1년 데이터를 사용하고, 
-   AAPL이 MSFT보다 5% 높을 것으로 예상해."
-```
-
-AI가 자동으로 적절한 Tools를 순차적으로 호출합니다:
-1. `calculate_expected_returns`
-2. `calculate_covariance_matrix`
-3. `create_investor_view`
-4. `optimize_portfolio_bl`
-
-### HTTP 모드 (ADK Agent)
-
-**1. MCP 서버 실행**
-
+### "uv: command not found"
 ```bash
-python start_http.py
-# 서버가 http://localhost:5000 에서 실행됩니다
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**2. Agent 실행**
-
-```python
-from bl_agent.agent import root_agent
-
-response = root_agent.execute(
-    "AAPL, MSFT, GOOGL로 포트폴리오를 최적화하고 백테스팅해줘."
-)
-print(response)
-```
-
----
-
-## 최종 목표 (전체 Phase 완료 후)
-
-### 문서화
-
-- README.md 업데이트
-- 사용 예시 및 튜토리얼 추가
-- API 문서 작성 (도구별 상세 문서)
-- FastMCP stdio/HTTP 모드 가이드
-
-### 배포
-
-- PyPI 패키지 등록 (`pip install black-litterman-mcp`)
-- GitHub 저장소 공개
-- Windsurf/Claude Desktop 연동 가이드
-- ADK Agent 예제 코드
-- Docker 이미지 제공 (선택사항)
+### 더 많은 도움이 필요하면
+- [GitHub Issues](https://github.com/irresi/bl-view-mcp/issues)
+- [QUICKSTART.md](QUICKSTART.md) 참고

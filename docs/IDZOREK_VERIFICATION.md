@@ -94,19 +94,19 @@ TEST 2: Per-View Confidence (dict)
 
 ### Before (단일 confidence만 지원)
 ```python
-views = {"AAPL": 0.10, "MSFT": 0.05}
+views = {"P": [{"AAPL": 1}, {"MSFT": 1}], "Q": [0.10, 0.05]}
 confidence = 0.7  # 모두 70%
 ```
 
 ### After (view별 confidence 지원)
 ```python
 # 방법 1: 단일 confidence (기존과 동일)
-views = {"AAPL": 0.10, "MSFT": 0.05}
+views = {"P": [{"AAPL": 1}, {"MSFT": 1}], "Q": [0.10, 0.05]}
 confidence = 0.7
 
 # 방법 2: view별 confidence (신규!)
-views = {"AAPL": 0.10, "MSFT": 0.05}
-confidence = {"AAPL": 0.9, "MSFT": 0.6}
+views = {"P": [{"AAPL": 1}, {"MSFT": 1}], "Q": [0.10, 0.05]}
+confidence = [0.9, 0.6]  # 뷰 순서대로
 ```
 
 ## 📊 LLM 호출 가능성
@@ -116,8 +116,8 @@ confidence = {"AAPL": 0.9, "MSFT": 0.6}
 optimize_portfolio_bl(
     tickers=["AAPL", "MSFT", "GOOGL"],
     period="1Y",
-    views={"AAPL": 0.10},
-    confidence=85  # 또는 0.85
+    views={"P": [{"AAPL": 1}], "Q": [0.10]},
+    confidence=0.85  # 또는 85
 )
 ```
 
@@ -126,8 +126,8 @@ optimize_portfolio_bl(
 optimize_portfolio_bl(
     tickers=["AAPL", "MSFT", "GOOGL"],
     period="1Y",
-    views={"AAPL": 0.10, "MSFT": 0.05},
-    confidence={"AAPL": 0.9, "MSFT": 0.6}
+    views={"P": [{"AAPL": 1}, {"MSFT": 1}], "Q": [0.10, 0.05]},
+    confidence=[0.9, 0.6]  # 뷰 순서대로
 )
 ```
 
@@ -157,9 +157,9 @@ def optimize_portfolio_bl(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     period: Optional[str] = None,
-    market_caps: Optional[dict] = None,
     views: Optional[dict] = None,
-    confidence: Optional[float | dict] = None,  # ✅ float or dict
+    confidence: Optional[float | list] = None,  # ✅ float or list
+    investment_style: str = "balanced",
     risk_aversion: Optional[float] = None
 ) -> dict:
     return tools.optimize_portfolio_bl(
@@ -167,9 +167,9 @@ def optimize_portfolio_bl(
         start_date=start_date,
         end_date=end_date,
         period=period,
-        market_caps=market_caps,
         views=views,
         confidence=confidence,
+        investment_style=investment_style,
         risk_aversion=risk_aversion
     )
 ```
@@ -179,26 +179,32 @@ def optimize_portfolio_bl(
 - Parameter 순서 일치
 - Keyword arguments 사용으로 안전성 확보
 - Optional 타입 모두 동일
+- `market_caps` 파라미터 제거됨 (자동 로드)
 
 ## 📝 결론
 
 ### ✅ 검증 완료 항목
 1. **Idzorek 방식 올바름**: omega="idzorek" + view_confidences
-2. **Absolute View 지원**: {"AAPL": 0.10}
-3. **Per-View Confidence 지원**: {"AAPL": 0.9, "MSFT": 0.6}
+2. **P, Q 형식 지원**: `{"P": [...], "Q": [...]}`
+3. **Per-View Confidence 지원**: `[0.9, 0.6]` (리스트 형식)
 4. **함수 시그니처 일치**: server.py ↔ tools.py
 5. **Validation 강화**: 타입 체크, 누락 검증, swap 감지
 6. **LLM 호출 가능**: 간단하고 직관적인 API
+7. **market_caps 자동 로드**: yfinance에서 자동 다운로드
 
 ### 🎯 추천 사용법
 ```python
-# 기본 (권장)
-views = {"AAPL": 0.10}
+# 절대 뷰 (Absolute View)
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}
 confidence = 0.7  # 또는 70
 
-# 고급 (view별 다른 확신도)
-views = {"AAPL": 0.10, "MSFT": 0.05}
-confidence = {"AAPL": 0.9, "MSFT": 0.6}
+# 상대 뷰 (Relative View)
+views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
+confidence = 0.85
+
+# 복수 뷰 + view별 다른 확신도
+views = {"P": [{"AAPL": 1}, {"MSFT": 1}], "Q": [0.10, 0.05]}
+confidence = [0.9, 0.6]  # 뷰 순서대로
 ```
 
 ### 🚀 다음 단계

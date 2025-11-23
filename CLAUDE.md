@@ -244,12 +244,16 @@ backtest_result = backtest_portfolio(
 
 ### Risk Aversion Calculation
 
-1. SPY 데이터로 `market_implied_risk_aversion()` 자동 계산
+**포트폴리오 기반 Idzorek 방식** 사용:
+
+1. `_calculate_portfolio_risk_aversion()` 자동 계산
+   - 수식: δ = (E(r) - rf) / σ²_portfolio
+   - σ²_portfolio = w_mkt^T × Σ × w_mkt (포트폴리오 자체 데이터 사용)
 2. `investment_style` 배수 적용:
    - aggressive: δ × 0.5
    - balanced: δ × 1.0
    - conservative: δ × 2.0
-3. SPY 없으면 fallback 2.5
+3. 계산 불가 시 fallback 2.5
 
 ### Market Caps (자동 로드)
 
@@ -380,7 +384,7 @@ optimize_portfolio_bl(["005930.KS", "AAPL"])
 
 ## Known Issues
 
-- SPY.parquet 없으면 `investment_style` 효과 없음 (fallback 2.5 사용)
+- 가격 데이터가 부족하면 risk aversion 계산 fallback (2.5 사용)
 
 ## Phase 2 계획 (2025-11-23 결정)
 

@@ -464,7 +464,6 @@ def save_custom_price_data(
     _register_custom_ticker(ticker, source, data_dir)
 
     return {
-        "success": True,
         "ticker": ticker,
         "records": len(df),
         "date_range": {

@@ -413,7 +413,6 @@ def upload_price_data(
 
     Returns:
         Dictionary containing:
-        - success: True if upload successful
         - ticker: The ticker symbol saved
         - records: Number of records saved
         - date_range: Start and end dates of the data
@@ -465,7 +464,12 @@ def upload_price_data_from_file(
         source: Source identifier (default: "file")
 
     Returns:
-        Dictionary with upload results (same as upload_price_data)
+        Dictionary with upload results:
+        - ticker: The ticker symbol saved
+        - records: Number of records saved
+        - date_range: Start and end dates of the data
+        - file_path: Path to the saved Parquet file
+        - source: Source identifier
 
     Examples:
         # From CSV file

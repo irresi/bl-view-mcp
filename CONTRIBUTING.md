@@ -233,8 +233,8 @@ result = optimize_portfolio_bl(
     confidence=0.85
 )
 
-assert result["success"] == True
 assert "weights" in result
+assert "expected_return" in result
 ```
 
 ---
@@ -274,36 +274,31 @@ def optimize_portfolio_bl(
 ### 에러 처리
 
 - 명확한 에러 메시지 제공
-- `success` 필드로 성공/실패 구분
+- 예외를 통한 에러 전파 (MCP 프로토콜이 자동 처리)
 - 원인과 해결 방법 포함
 
 ```python
-return {
-    "success": False,
-    "error": "Insufficient data",
-    "message": "At least 60 days of data required. Found: 30 days.",
-    "suggestion": "Try a longer date range or different tickers"
-}
+raise ValueError(
+    "Insufficient data: At least 60 days of data required. Found: 30 days. "
+    "Try a longer date range or different tickers."
+)
 ```
 
 ### 반환 형식
 
-모든 도구는 Dict를 반환:
+모든 도구는 Dict를 반환 (성공 시):
 
 ```python
-# 성공
+# optimize_portfolio_bl
 {
-    "success": True,
-    "result": {...},
-    "metadata": {...}
+    "weights": {"AAPL": 0.4, "MSFT": 0.6},
+    "expected_return": 0.12,
+    "volatility": 0.20,
+    "sharpe_ratio": 0.60,
+    ...
 }
 
-# 실패
-{
-    "success": False,
-    "error": "ErrorType",
-    "message": "Human-readable message"
-}
+# 에러 발생 시 예외가 발생하고 MCP가 자동으로 에러 응답 생성
 ```
 
 ---

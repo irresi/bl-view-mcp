@@ -13,20 +13,20 @@ Implemented unified view interface for Black-Litterman model with dict-based P m
 ### 1. Core Functions (`bl_mcp/tools.py`)
 
 #### `_parse_views(views, tickers) -> (P, Q)`
-Converts all three view formats to P, Q matrices:
+Converts view formats to P, Q matrices:
 
 ```python
-# Format 1: Absolute views (backward compatible)
-views = {"AAPL": 0.10, "MSFT": 0.05}
-→ P = [[1, 0, 0], [0, 1, 0]], Q = [0.10, 0.05]
-
-# Format 2: Dict-based P (NEW - relative views!)
+# Format 1: Dict-based P (relative views!)
 views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
 → P = [[1, -1, 0]], Q = [0.20]
 
-# Format 3: NumPy P (advanced)
+# Format 2: NumPy P (advanced)
 views = {"P": [[1, -1, 0]], "Q": [0.20]}
 → P = [[1, -1, 0]], Q = [0.20]
+
+# Absolute view with P, Q format
+views = {"P": [{"AAPL": 1}], "Q": [0.10]}
+→ P = [[1, 0, 0]], Q = [0.10]
 ```
 
 **Features**:
@@ -40,14 +40,12 @@ Unifies all confidence formats to list:
 
 ```python
 None → [0.5, 0.5, ...]           # Default
-0.7 → [0.7, 0.7, ...]             # Float
-{"AAPL": 0.9} → [0.9]             # Dict (absolute views only)
-[0.9, 0.8] → [0.9, 0.8]           # List (passthrough)
+0.7 → [0.7, 0.7, ...]             # Float (same for all views)
+[0.9, 0.8] → [0.9, 0.8]           # List (per-view confidence)
 ```
 
 **Features**:
 - ✅ Validates confidence length matches number of views
-- ✅ Rejects dict confidence for P, Q views
 - ✅ Percentage normalization (70 → 0.7)
 - ✅ Per-view confidence validation
 
@@ -62,26 +60,25 @@ None → [0.5, 0.5, ...]           # Default
 
 **Updated Docstring**:
 ```python
-views: Your investment views (optional). Supports three formats:
-      
-      1. Absolute views (dict):
-         {"AAPL": 0.10, "MSFT": 0.05}
-         - AAPL expected to return 10%, MSFT 5%
-         
-      2. Dict-based P matrix (relative views):
+views: Your investment views (optional). Uses P, Q format:
+
+      1. Dict-based P matrix (LLM-friendly):
          {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
          - NVDA will outperform AAPL by 20%
          - Ticker names (order-independent, LLM-friendly)
-         
-      3. NumPy P matrix (advanced):
+
+      2. NumPy P matrix (advanced):
          {"P": [[1, -1, 0]], "Q": [0.20]}
          - Index-based (NVDA=0, AAPL=1, MSFT=2)
+
+      3. Absolute view with P, Q:
+         {"P": [{"AAPL": 1}], "Q": [0.10]}
+         - AAPL expected to return 10%
 
 confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
            Can be:
            - Single float: Same confidence for all views
-           - Dict: Per-ticker confidence (absolute views only)
-           - List: Per-view confidence (P, Q views)
+           - List: Per-view confidence
            - None: Defaults to 0.5 (neutral)
 ```
 
@@ -90,17 +87,13 @@ confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
 **File**: `tests/test_relative_views_simple.py`
 
 **Test Coverage**:
-- ✅ **Backward Compatibility**
-  - Absolute views with single confidence
-  - Absolute views with dict confidence
-  - Default confidence (None)
-
 - ✅ **Dict-based P Matrix**
   - Single relative view
   - Multiple relative views
   - Complex weights
+  - Absolute view with P, Q format
   - Float confidence auto-conversion
-  - Default confidence
+  - Default confidence (None)
 
 - ✅ **NumPy P Matrix**
   - Single view
@@ -110,22 +103,17 @@ confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
 - ✅ **Confidence Normalization**
   - None → list
   - Float → list
-  - Dict → list (absolute views)
   - List passthrough
-  - Percentage input
+  - Percentage input (70 → 0.7)
 
 - ✅ **Validation Errors**
-  - Unknown ticker in absolute views
   - Unknown ticker in dict-based P
   - Confidence length mismatch
   - Missing Q with P
   - P/Q dimension mismatch
   - NumPy P column count mismatch
-  - Dict confidence with P, Q views
-  - Missing confidence for ticker
 
 - ✅ **Equivalence Testing**
-  - Absolute view == dict-based P
   - Dict-based P == NumPy P
 
 **Test Results**:
@@ -135,14 +123,11 @@ $ make test-relative
 🧪 RELATIVE VIEW SUPPORT TESTS
 ============================================================
 
-✅ Testing absolute views (backward compatibility)...
-  ✓ Single confidence works
-  ✓ Dict confidence works
-
 ✅ Testing dict-based P matrix (relative views)...
   ✓ Single relative view works
   ✓ Multiple relative views work
   ✓ Float confidence auto-converts to list
+  ✓ Absolute view with P, Q format works
 
 ✅ Testing NumPy P matrix...
   ✓ NumPy P matrix works
@@ -151,10 +136,8 @@ $ make test-relative
   ✓ Unknown ticker detected
   ✓ Confidence length mismatch detected
   ✓ Missing Q detected
-  ✓ Dict confidence with P, Q rejected
 
 ✅ Testing equivalence...
-  ✓ Absolute view == dict-based P
   ✓ Dict-based P == NumPy P
 
 ============================================================
@@ -199,9 +182,9 @@ make help          # Shows test-relative in help menu
    - Easier validation
    - Clear per-view confidence
 
-3. **Backward Compatible**: Old code must continue working
-   - `{"AAPL": 0.10}` still works
-   - Dict confidence still works for absolute views
+3. **P, Q Format Only**: All views use P, Q format
+   - Absolute views: `{"P": [{"AAPL": 1}], "Q": [0.10]}`
+   - Relative views: `{"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}`
    - Single float confidence still works
 
 4. **Validation First**: Catch errors early with clear messages
@@ -258,15 +241,13 @@ views={
 
 - [x] Support dict-based P matrix format
 - [x] Support NumPy P matrix format
-- [x] Maintain backward compatibility with absolute views dict
 - [x] Normalize confidence to list internally
-- [x] Support float, dict, list, and None confidence inputs
+- [x] Support float, list, and None confidence inputs
 - [x] Validate P matrix tickers exist in tickers list
 - [x] Validate confidence length matches Q length
 - [x] Validate Q is provided when P is provided
-- [x] Add comprehensive tests (15+ test cases)
+- [x] Add comprehensive tests
 - [x] Update documentation with examples
-- [x] No breaking changes to existing API
 
 ## 🚀 Next Steps
 

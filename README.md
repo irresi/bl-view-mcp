@@ -141,8 +141,9 @@ backtest_portfolio(
 사용 가능한 티커 목록을 조회합니다.
 
 ```python
-list_available_tickers(search="AAPL")  # 검색
-list_available_tickers(limit=50)        # 상위 50개
+list_available_tickers(search="AAPL")        # 검색
+list_available_tickers(dataset="snp500")     # S&P 500만
+list_available_tickers(dataset="custom")     # 커스텀 데이터
 ```
 
 ---

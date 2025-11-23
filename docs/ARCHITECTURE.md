@@ -159,7 +159,6 @@ custom_config = {
 
 ```json
 {
-  "success": true,
   "weights": {"AAPL": 0.33, "MSFT": 0.33, "GOOGL": 0.33},
   "expected_return": 0.12,
   "volatility": 0.23,

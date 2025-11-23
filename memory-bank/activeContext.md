@@ -2,12 +2,51 @@
 
 ## 현재 상태 (2025-11-23)
 
-**Phase**: Phase 1 완료, Phase 2 범위 확정
-**초점**: 프로젝트 분리 결정, backtest_portfolio 구현 준비
+**Phase**: Phase 2 진행 중 (backtest_portfolio 완료)
+**초점**: PyPI 배포 완료, Claude Desktop 호환성 검증됨
 
 ---
 
-## 핵심 결정 (2025-11-23 저녁)
+## PyPI 배포 (v0.2.3)
+
+### 설치
+```bash
+uv tool install black-litterman-mcp
+# 또는
+pip install black-litterman-mcp
+```
+
+### Claude Desktop 설정
+```json
+{
+  "mcpServers": {
+    "black-litterman": {
+      "command": "/Users/사용자/.local/bin/bl-view-mcp"
+    }
+  }
+}
+```
+
+---
+
+## Claude Desktop 호환성 이슈 (해결됨)
+
+### 문제 1: Read-only 파일 시스템 (v0.2.2에서 해결)
+- **증상**: `[Errno 30] Read-only file system: 'data'`
+- **원인**: Claude Desktop이 MCP를 루트 `/`에서 실행
+- **해결**: 데이터 디렉토리를 `~/.black-litterman/data`로 변경
+
+### 문제 2: JSON 문자열 파라미터 (v0.2.3에서 해결)
+- **증상**: views 파라미터 Pydantic 검증 실패
+- **원인**: Claude Desktop이 JSON object를 문자열로 전송
+- **해결**: `views: Optional[Union[ViewMatrix, dict, str]]` - str 타입 추가
+- **참고**: FastMCP + Claude Code 알려진 이슈
+  - GitHub Issue: anthropics/claude-code#3084
+  - 현재 workaround가 업계 표준
+
+---
+
+## 핵심 결정 (2025-11-23)
 
 ### 프로젝트 분리
 
@@ -19,62 +58,31 @@
 ### Phase 2 범위 축소
 
 **포함**:
-- `backtest_portfolio` - 포트폴리오 백테스팅
+- `backtest_portfolio` - 포트폴리오 백테스팅 ✅
 - `calculate_hrp_weights` - HRP 최적화 (선택)
 
 **제외** (bl-orchestrator로 이동):
 - ~~`generate_views_from_technicals`~~
 - ~~`generate_views_from_fundamentals`~~
 - ~~`generate_views_from_sentiment`~~
-- ~~`get_market_data`~~
-- ~~`calculate_factor_scores`~~
-
-### View Generation 전략 변경
-
-**이전 계획** (폐기):
-```
-기술지표/펀더멘탈 → 규칙 기반 로직 → P, Q, confidence
-                   ↑ 자의적, 정당화 어려움
-```
-
-**새 접근** (채택):
-```
-Multi-agent debate → LLM reasoning → P, Q, confidence
-                     ↑ LLM이 직접 판단
-```
-
-**이유**:
-1. "AAPL이 10% 오른다" 같은 절대 뷰는 예측 불가능
-2. "AAPL이 MSFT보다 나을 것" 같은 상대 뷰는 LLM 토론으로 정당화 가능
-3. 규칙 기반 로직은 자의적 (RSI < 30 → 매수? 왜 30?)
 
 ---
 
-## 예상 워크플로우 (Phase 2 완료 후)
+## 버전 히스토리
 
-```
-bl-orchestrator:
-1. 데이터 수집 (yfinance, ccxt)
-2. Agent Debate (Bull vs Bear vs Moderator)
-3. 합의된 Views 출력: {"P": [...], "Q": [...], "confidence": [...]}
-
-bl-mcp:
-4. optimize_portfolio_bl(tickers, views=debate_output)
-5. backtest_portfolio(tickers, weights=result)
-```
-
----
-
-## GitHub Issue 업데이트
-
-Issue #11에 결정 사항 코멘트 추가됨:
-https://github.com/irresi/bl-view-mcp/issues/11#issuecomment-3567495975
+| 버전 | 날짜 | 변경 사항 |
+|------|------|----------|
+| v0.2.3 | 2025-11-23 | views 파라미터 str 타입 추가 (Claude Desktop 호환) |
+| v0.2.2 | 2025-11-23 | 데이터 디렉토리 홈으로 이동 (read-only 해결) |
+| v0.2.1 | 2025-11-23 | backtest_portfolio 추가 |
 
 ---
 
 ## 다음 단계
 
-- [ ] `backtest_portfolio` 구현
+- [x] `backtest_portfolio` 구현 ✅
+- [x] PyPI 배포 ✅
+- [x] Claude Desktop 호환성 검증 ✅
 - [ ] `calculate_hrp_weights` 구현 (선택)
 - [ ] bl-orchestrator 프로젝트 생성 (별도)
 

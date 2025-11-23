@@ -66,6 +66,7 @@ dev = ["pytest", "mypy", "ruff"]        # 개발용
 | Tool | 용도 | 비고 |
 |------|------|------|
 | `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구 |
+| `backtest_portfolio` | 포트폴리오 백테스팅 | **NEW** Phase 2 |
 | `upload_price_data` | 커스텀 가격 데이터 업로드 | 소량 데이터용 |
 | `upload_price_data_from_file` | 파일에서 가격 데이터 로드 | 대량 데이터용 |
 | `list_available_tickers` | 사용 가능 티커 조회 | 검색/필터 지원 |
@@ -77,6 +78,11 @@ server.py (@mcp.tool)
     │               ├── _parse_views()
     │               ├── _normalize_confidence()
     │               └── BlackLittermanModel(omega="idzorek")
+    ├── backtest_portfolio()       ← NEW
+    │       └── tools.py
+    │               ├── _simulate_portfolio()
+    │               ├── _calculate_returns_metrics()
+    │               └── _calculate_benchmark_metrics()
     ├── upload_price_data()
     │       └── data_loader.save_custom_price_data()
     ├── upload_price_data_from_file()
@@ -132,6 +138,101 @@ confidence = None       # 기본값 0.5
 ```
 
 **삭제됨**: dict 형식 (`{"AAPL": 0.9}`) 더 이상 지원 안 함
+
+### backtest_portfolio Parameters (NEW)
+
+```python
+backtest_portfolio(
+    tickers: list[str],           # ["AAPL", "MSFT", "GOOGL"]
+    weights: dict[str, float],    # {"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25}
+    period: str = "1Y",           # "1Y", "3Y", "5Y" (권장)
+    start_date: str = None,       # "2020-01-01" (period와 택1)
+    strategy: str = "passive_rebalance",  # buy_and_hold/passive_rebalance/risk_managed
+    benchmark: str = "SPY",       # 벤치마크 (None으로 비활성화)
+    initial_capital: float = 10000.0,
+    custom_config: dict = None    # 고급 설정 (strategy 오버라이드)
+)
+```
+
+### Strategy Presets
+
+| Strategy | 설명 | 리밸런싱 | Stop-Loss | MDD Limit |
+|----------|------|---------|-----------|-----------|
+| `buy_and_hold` | 매입 후 보유 | 없음 | 없음 | 없음 |
+| `passive_rebalance` | 패시브 투자 (DEFAULT) | 월별 | 없음 | 없음 |
+| `risk_managed` | 리스크 관리 | 월별 | 10% | 20% |
+
+### Custom Config Options
+
+```python
+custom_config = {
+    "rebalance_frequency": "quarterly",  # none/weekly/monthly/quarterly/semi-annual/annual
+    "fees": 0.002,           # 수수료 (0.2%)
+    "slippage": 0.001,       # 슬리피지 (0.1%)
+    "stop_loss": 0.10,       # 손절매 (10%)
+    "take_profit": 0.30,     # 익절매 (30%)
+    "trailing_stop": True,   # 트레일링 스탑
+    "max_drawdown_limit": 0.20  # MDD 한도 (20%)
+}
+```
+
+### Backtest Output
+
+```python
+{
+    # Performance Metrics
+    "total_return": 0.25,      # 총 수익률 (25%)
+    "cagr": 0.12,              # 연평균 수익률 (12%)
+    "volatility": 0.18,        # 연간 변동성 (18%)
+    "sharpe_ratio": 0.67,      # 샤프 비율
+    "sortino_ratio": 0.85,     # 소르티노 비율
+    "max_drawdown": -0.15,     # 최대 낙폭 (-15%)
+    "calmar_ratio": 0.80,      # 칼마 비율
+
+    # Value Metrics
+    "initial_capital": 10000.0,
+    "final_value": 12500.0,
+
+    # Cost Metrics
+    "total_fees_paid": 45.0,
+    "num_rebalances": 12,
+    "turnover": 0.85,
+
+    # Benchmark (if provided)
+    "benchmark_return": 0.20,
+    "excess_return": 0.05,     # 초과 수익
+    "alpha": 0.03,             # 젠센 알파
+    "beta": 0.95,              # 베타
+    "information_ratio": 0.35,
+
+    # Tax Info
+    "holding_periods": {
+        "AAPL": {"days": 730, "is_long_term": True},
+        ...
+    }
+}
+```
+
+### Typical Workflow
+
+```python
+# Step 1: 포트폴리오 최적화
+bl_result = optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    period="1Y",
+    views={"P": [{"AAPL": 1, "MSFT": -1}], "Q": [0.10]},
+    confidence=0.7
+)
+
+# Step 2: 최적화 결과로 백테스트
+backtest_result = backtest_portfolio(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    weights=bl_result["weights"],  # optimize 결과 직접 사용
+    period="3Y",
+    strategy="passive_rebalance",
+    benchmark="SPY"
+)
+```
 
 ## Design Decisions
 
@@ -293,7 +394,7 @@ optimize_portfolio_bl(["005930.KS", "AAPL"])
 | Tool | 상태 | 설명 |
 |------|------|------|
 | `optimize_portfolio_bl` | ✅ 기존 | BL 최적화 |
-| `backtest_portfolio` | 🆕 신규 | 포트폴리오 백테스팅 |
+| `backtest_portfolio` | ✅ 완료 | 포트폴리오 백테스팅 |
 | `calculate_hrp_weights` | 🆕 선택 | HRP 최적화 (BL 대안) |
 
 **제외된 기능** (bl-orchestrator로 이동):

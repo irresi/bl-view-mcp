@@ -1,5 +1,6 @@
 # Black-Litterman Portfolio Optimization MCP Server
 ![alt text](./docs/image.png)
+![alt text](./docs/image2.png)
 이 프로젝트는 **Black-Litterman 포트폴리오 최적화**를 **Model Context Protocol (MCP)** 서버로 제공합니다.
 
 Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.
@@ -195,11 +196,66 @@ views = {"P": [[1, -1, 0]], "Q": [0.20]}  # 인덱스 기반
 }
 ```
 
-### 2. 계획된 Tools (Phase 2)
+### 2. Tool: `backtest_portfolio` (NEW - Phase 2)
+
+**목적**: 포트폴리오 백테스팅으로 전략 검증
+
+**입력**:
+- `tickers`: List[str] - 티커 심볼 리스트
+- `weights`: Dict[str, float] - 포트폴리오 비중 (optimize_portfolio_bl 결과 사용 가능)
+- `period`: Optional[str] - 상대 기간 ("1Y", "3Y", "5Y" 등)
+- `start_date`: Optional[str] - 시작 날짜 "YYYY-MM-DD"
+- `strategy`: str - 전략 프리셋
+  - `"buy_and_hold"`: 매입 후 보유 (리밸런싱 없음)
+  - `"passive_rebalance"`: 월별 리밸런싱 (DEFAULT)
+  - `"risk_managed"`: 월별 리밸런싱 + 10% 손절매 + 20% MDD 한도
+- `benchmark`: Optional[str] - 벤치마크 (기본: "SPY")
+- `initial_capital`: float - 초기 자본 (기본: 10000)
+- `custom_config`: Optional[Dict] - 고급 설정 (strategy 오버라이드)
+
+**출력**:
+```json
+{
+  "total_return": 0.25,
+  "cagr": 0.12,
+  "volatility": 0.18,
+  "sharpe_ratio": 0.67,
+  "sortino_ratio": 0.85,
+  "max_drawdown": -0.15,
+  "calmar_ratio": 0.80,
+  "initial_capital": 10000.0,
+  "final_value": 12500.0,
+  "benchmark_return": 0.20,
+  "excess_return": 0.05,
+  "alpha": 0.03,
+  "beta": 0.95,
+  "holding_periods": {"AAPL": {"days": 730, "is_long_term": true}}
+}
+```
+
+**사용 예시**:
+```python
+# Step 1: 포트폴리오 최적화
+bl_result = optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    period="1Y"
+)
+
+# Step 2: 백테스트
+backtest_result = backtest_portfolio(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    weights=bl_result["weights"],
+    period="3Y",
+    strategy="passive_rebalance"
+)
+```
+
+### 3. 계획된 Tools
 
 | Tool | 상태 | 설명 |
 |------|------|------|
-| `backtest_portfolio` | 🆕 구현 예정 | 포트폴리오 백테스팅 |
+| `optimize_portfolio_bl` | ✅ 완료 | BL 포트폴리오 최적화 |
+| `backtest_portfolio` | ✅ 완료 | 포트폴리오 백테스팅 |
 | `calculate_hrp_weights` | 🆕 선택사항 | HRP 최적화 (BL 대안) |
 
 **프로젝트 분리 결정** (2025-11-23):

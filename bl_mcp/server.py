@@ -155,7 +155,7 @@ def optimize_portfolio_bl(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     period: Optional[str] = None,
-    views: Optional[Union[ViewMatrix, dict]] = None,
+    views: Optional[Union[ViewMatrix, dict, str]] = None,
     confidence: Optional[float | list] = None,  # Can be float or list
     investment_style: InvestmentStyle = InvestmentStyle.BALANCED,
     risk_aversion: Optional[float] = None  # Advanced parameter (last)

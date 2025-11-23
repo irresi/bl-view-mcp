@@ -2,8 +2,8 @@ name: Update NASDAQ 100 Data
 
 on:
   schedule:
-    # Run at 22:00 UTC on weekdays (after US market close, staggered from S&P 500)
-    - cron: '0 22 * * 1-5'
+    # Run at 22:30 UTC on weekdays (1.5 hours after US market close, staggered from S&P 500)
+    - cron: '30 22 * * 1-5'
   workflow_dispatch:
     inputs:
       full_refresh:

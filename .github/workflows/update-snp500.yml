@@ -2,8 +2,8 @@ name: Update S&P 500 Data
 
 on:
   schedule:
-    # Run at 21:00 UTC on weekdays (after US market close)
-    - cron: '0 21 * * 1-5'
+    # Run at 22:00 UTC on weekdays (1 hour after US market close at 21:00 UTC)
+    - cron: '0 22 * * 1-5'
   workflow_dispatch:
     inputs:
       full_refresh:

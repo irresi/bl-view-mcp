@@ -2,7 +2,7 @@ name: Update Crypto Data
 
 on:
   schedule:
-    # Run daily at 00:00 UTC (crypto markets are 24/7)
+    # Run daily at 00:00 UTC (crypto markets are 24/7, no market close)
     - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:

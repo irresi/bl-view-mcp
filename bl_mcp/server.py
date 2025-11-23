@@ -17,7 +17,7 @@ mcp = FastMCP("black-litterman-portfolio")
 class InvestmentStyle(str, Enum):
     """
     Investment style for risk aversion adjustment.
-    
+
     Adjusts market-implied risk aversion based on investor preference.
     - Aggressive: 0.5x market δ (higher concentration, higher risk)
     - Balanced: 1.0x market δ (market equilibrium, default)
@@ -26,6 +26,76 @@ class InvestmentStyle(str, Enum):
     AGGRESSIVE = "aggressive"
     BALANCED = "balanced"
     CONSERVATIVE = "conservative"
+
+
+class BacktestStrategy(str, Enum):
+    """
+    Backtesting strategy presets.
+
+    Choose a strategy based on your investment approach:
+    - buy_and_hold: No rebalancing. Simple baseline comparison.
+    - passive_rebalance: Monthly rebalancing to target weights. Standard ETF approach. (DEFAULT)
+    - risk_managed: Monthly rebalancing + 10% stop-loss + 20% max drawdown limit.
+    """
+    BUY_AND_HOLD = "buy_and_hold"
+    PASSIVE_REBALANCE = "passive_rebalance"
+    RISK_MANAGED = "risk_managed"
+
+
+class BacktestConfig(BaseModel):
+    """
+    Advanced configuration for backtesting.
+
+    ⚠️ For most users, use BacktestStrategy presets instead.
+    Only use this for fine-grained control over backtesting parameters.
+    """
+    rebalance_frequency: str = Field(
+        default="monthly",
+        description="Rebalancing frequency: 'none', 'weekly', 'monthly', 'quarterly', 'semi-annual', 'annual'"
+    )
+    fees: float = Field(
+        default=0.001,
+        description="Transaction fees as decimal (0.001 = 0.1%)",
+        ge=0.0,
+        le=0.1
+    )
+    slippage: float = Field(
+        default=0.0005,
+        description="Slippage as decimal (0.0005 = 0.05%)",
+        ge=0.0,
+        le=0.1
+    )
+    stop_loss: Optional[float] = Field(
+        default=None,
+        description="Stop-loss threshold (0.10 = 10% loss triggers exit)",
+        ge=0.0,
+        le=1.0
+    )
+    take_profit: Optional[float] = Field(
+        default=None,
+        description="Take-profit threshold (0.20 = 20% gain triggers exit)",
+        ge=0.0,
+        le=10.0
+    )
+    trailing_stop: bool = Field(
+        default=False,
+        description="Enable trailing stop-loss (follows price up)"
+    )
+    max_drawdown_limit: Optional[float] = Field(
+        default=None,
+        description="Maximum drawdown limit (0.20 = 20% drawdown triggers full exit)",
+        ge=0.0,
+        le=1.0
+    )
+
+    @field_validator('rebalance_frequency')
+    @classmethod
+    def validate_rebalance_frequency(cls, v):
+        """Validate rebalance frequency."""
+        valid = ['none', 'weekly', 'monthly', 'quarterly', 'semi-annual', 'annual']
+        if v not in valid:
+            raise ValueError(f"rebalance_frequency must be one of {valid}, got '{v}'")
+        return v
 
 
 # Pydantic models for type safety
@@ -414,6 +484,167 @@ def upload_price_data_from_file(
     """
     return data_loader.load_and_save_from_file(
         ticker, file_path, date_column, close_column, source
+    )
+
+
+@mcp.tool()
+def backtest_portfolio(
+    tickers: list[str],
+    weights: dict[str, float],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    period: Optional[str] = None,
+    strategy: BacktestStrategy = BacktestStrategy.PASSIVE_REBALANCE,
+    benchmark: Optional[str] = "SPY",
+    initial_capital: float = 10000.0,
+    custom_config: Optional[BacktestConfig] = None
+) -> dict:
+    """
+    Backtest a portfolio with specified weights.
+
+    This tool evaluates how a portfolio would have performed historically,
+    including realistic transaction costs and rebalancing.
+
+    RECOMMENDED WORKFLOW:
+    1. First call optimize_portfolio_bl() to get optimal weights
+    2. Then call backtest_portfolio() with those weights to validate performance
+
+    Date Range Options (mutually exclusive):
+        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3Y", "5Y"
+        - Provide 'start_date' for historical data: "2020-01-01"
+        - If both provided, 'start_date' takes precedence
+        - If neither provided, defaults to "1Y" (1 year)
+
+    Args:
+        tickers: List of ticker symbols in the portfolio
+        weights: Target weights from optimize_portfolio_bl output
+                 Example: {"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25}
+                 Weights are automatically normalized to sum to 1.0
+        start_date: Backtest start date (YYYY-MM-DD), optional
+        end_date: Backtest end date (YYYY-MM-DD), optional
+        period: Relative period ("1Y", "3Y", "5Y") - RECOMMENDED
+        strategy: Backtesting strategy preset (Enum)
+
+                 ✅ RECOMMENDED: Use strategy presets for most use cases
+
+                 - "buy_and_hold": No rebalancing, simple baseline
+                   Natural language: "매입 후 보유", "buy and hold"
+                 - "passive_rebalance": Monthly rebalancing (DEFAULT)
+                   Natural language: "월별 리밸런싱", "passive investing"
+                 - "risk_managed": Monthly rebalancing + 10% stop-loss + 20% MDD limit
+                   Natural language: "손절매 포함", "risk managed"
+
+        benchmark: Benchmark ticker for comparison (default: "SPY")
+                  Set to None to skip benchmark comparison
+        initial_capital: Starting capital (default: 10000)
+        custom_config: ⚠️ ADVANCED - Override strategy preset
+
+                      Only use this for fine-grained control.
+                      Available options:
+                      - rebalance_frequency: "none", "weekly", "monthly", "quarterly", "semi-annual", "annual"
+                      - fees: Transaction fees (0.001 = 0.1%)
+                      - slippage: Slippage cost (0.0005 = 0.05%)
+                      - stop_loss: Stop-loss threshold (0.10 = 10%)
+                      - take_profit: Take-profit threshold (0.20 = 20%)
+                      - trailing_stop: Enable trailing stop-loss (bool)
+                      - max_drawdown_limit: Max drawdown limit (0.20 = 20%)
+
+    Returns:
+        Dictionary containing:
+
+        Performance Metrics:
+        - total_return: Total cumulative return (0.25 = 25%)
+        - cagr: Compound Annual Growth Rate
+        - volatility: Annualized volatility
+        - sharpe_ratio: Risk-adjusted return (higher is better)
+        - sortino_ratio: Downside risk-adjusted return
+        - max_drawdown: Worst peak-to-trough decline (negative)
+        - calmar_ratio: CAGR / |Max Drawdown|
+
+        Value Metrics:
+        - initial_capital: Starting amount
+        - final_value: Ending portfolio value
+
+        Cost Metrics:
+        - total_fees_paid: Total transaction costs
+        - num_rebalances: Number of rebalancing events
+        - turnover: Portfolio turnover
+
+        Benchmark Comparison (if benchmark provided):
+        - benchmark_return: Benchmark total return
+        - excess_return: Portfolio return - Benchmark return
+        - alpha: Jensen's alpha (risk-adjusted excess return)
+        - beta: Portfolio beta vs benchmark
+        - information_ratio: Excess return / Tracking error
+
+        Risk Management:
+        - is_liquidated: Whether portfolio was liquidated
+        - liquidation_reason: Reason for liquidation (if any)
+
+        Tax Info:
+        - holding_periods: Per-ticker holding period info
+          - days: Number of days held
+          - is_long_term: True if held >= 1 year
+
+    Examples:
+        # Example 1: Basic backtest with BL weights
+        # Step 1: Get optimal weights
+        bl_result = optimize_portfolio_bl(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            period="1Y"
+        )
+        # Step 2: Backtest those weights
+        backtest_portfolio(
+            tickers=["AAPL", "MSFT", "GOOGL"],
+            weights=bl_result["weights"],
+            period="3Y",
+            strategy="passive_rebalance"
+        )
+
+        # Example 2: Risk-managed backtest (Korean)
+        Natural language: "손절매 전략으로 백테스트 해줘"
+        backtest_portfolio(
+            tickers=["NVDA", "AAPL", "MSFT"],
+            weights={"NVDA": 0.5, "AAPL": 0.3, "MSFT": 0.2},
+            period="5Y",
+            strategy="risk_managed"
+        )
+
+        # Example 3: Custom configuration
+        Natural language: "분기별 리밸런싱, 수수료 0.2%로 테스트"
+        backtest_portfolio(
+            tickers=["AAPL", "MSFT"],
+            weights={"AAPL": 0.6, "MSFT": 0.4},
+            period="2Y",
+            custom_config={
+                "rebalance_frequency": "quarterly",
+                "fees": 0.002
+            }
+        )
+    """
+    # Handle custom_config - can be BacktestConfig or dict
+    config_dict = None
+    if custom_config is not None:
+        if isinstance(custom_config, BacktestConfig):
+            config_dict = custom_config.model_dump()
+        elif isinstance(custom_config, dict):
+            # Validate via Pydantic
+            config_dict = BacktestConfig(**custom_config).model_dump()
+        else:
+            raise ValueError(
+                f"custom_config must be BacktestConfig or dict, got {type(custom_config).__name__}"
+            )
+
+    return tools.backtest_portfolio(
+        tickers=tickers,
+        weights=weights,
+        start_date=start_date,
+        end_date=end_date,
+        period=period,
+        strategy=strategy.value,
+        benchmark=benchmark,
+        initial_capital=initial_capital,
+        custom_config=config_dict
     )
 
 

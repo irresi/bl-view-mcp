@@ -448,3 +448,583 @@ def optimize_portfolio_bl(
     }
 
     # Exceptions propagate to MCP - it handles error responses automatically
+
+
+# =============================================================================
+# Backtest Portfolio Implementation
+# =============================================================================
+
+# Strategy preset configurations
+STRATEGY_PRESETS = {
+    "buy_and_hold": {
+        "rebalance_frequency": "none",
+        "fees": 0.001,
+        "slippage": 0.0005,
+        "stop_loss": None,
+        "take_profit": None,
+        "trailing_stop": False,
+        "max_drawdown_limit": None,
+    },
+    "passive_rebalance": {
+        "rebalance_frequency": "monthly",
+        "fees": 0.001,
+        "slippage": 0.0005,
+        "stop_loss": None,
+        "take_profit": None,
+        "trailing_stop": False,
+        "max_drawdown_limit": None,
+    },
+    "risk_managed": {
+        "rebalance_frequency": "monthly",
+        "fees": 0.001,
+        "slippage": 0.0005,
+        "stop_loss": 0.10,
+        "take_profit": None,
+        "trailing_stop": False,
+        "max_drawdown_limit": 0.20,
+    },
+}
+
+
+def _calculate_returns_metrics(
+    returns: pd.Series,
+    risk_free_rate: float = 0.02
+) -> dict:
+    """
+    Calculate all performance metrics from daily returns.
+
+    Args:
+        returns: Daily returns series
+        risk_free_rate: Annual risk-free rate (default: 2%)
+
+    Returns:
+        Dictionary with performance metrics
+    """
+    if len(returns) == 0:
+        return {
+            "total_return": 0.0,
+            "cagr": 0.0,
+            "volatility": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "calmar_ratio": 0.0,
+        }
+
+    # Total return
+    total_return = (1 + returns).prod() - 1
+
+    # Annualized metrics
+    total_days = len(returns)
+    years = total_days / 252
+    if years <= 0:
+        years = total_days / 252  # Minimum
+
+    # CAGR (Compound Annual Growth Rate)
+    cagr = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+
+    # Volatility (annualized)
+    volatility = returns.std() * np.sqrt(252)
+
+    # Sharpe ratio
+    excess_return = cagr - risk_free_rate
+    sharpe = excess_return / volatility if volatility > 0 else 0
+
+    # Sortino ratio (downside deviation)
+    negative_returns = returns[returns < 0]
+    if len(negative_returns) > 0:
+        downside_std = negative_returns.std() * np.sqrt(252)
+    else:
+        downside_std = volatility
+    sortino = excess_return / downside_std if downside_std > 0 else 0
+
+    # Max drawdown
+    cumulative = (1 + returns).cumprod()
+    running_max = cumulative.cummax()
+    drawdown = (cumulative - running_max) / running_max
+    max_drawdown = drawdown.min()
+
+    # Calmar ratio (CAGR / |Max Drawdown|)
+    calmar = cagr / abs(max_drawdown) if max_drawdown != 0 else 0
+
+    return {
+        "total_return": float(total_return),
+        "cagr": float(cagr),
+        "volatility": float(volatility),
+        "sharpe_ratio": float(sharpe),
+        "sortino_ratio": float(sortino),
+        "max_drawdown": float(max_drawdown),
+        "calmar_ratio": float(calmar),
+    }
+
+
+def _calculate_benchmark_metrics(
+    portfolio_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    risk_free_rate: float = 0.02
+) -> dict:
+    """
+    Calculate benchmark comparison metrics.
+
+    Args:
+        portfolio_returns: Daily portfolio returns
+        benchmark_returns: Daily benchmark returns
+        risk_free_rate: Annual risk-free rate
+
+    Returns:
+        Dictionary with benchmark comparison metrics
+    """
+    # Align dates
+    common_dates = portfolio_returns.index.intersection(benchmark_returns.index)
+    if len(common_dates) == 0:
+        return {
+            "benchmark_return": 0.0,
+            "excess_return": 0.0,
+            "alpha": 0.0,
+            "beta": 1.0,
+            "information_ratio": 0.0,
+        }
+
+    port_ret = portfolio_returns.loc[common_dates]
+    bench_ret = benchmark_returns.loc[common_dates]
+
+    # Total returns
+    portfolio_total = (1 + port_ret).prod() - 1
+    benchmark_total = (1 + bench_ret).prod() - 1
+    excess_return = portfolio_total - benchmark_total
+
+    # Beta (covariance / variance)
+    covariance = port_ret.cov(bench_ret)
+    benchmark_variance = bench_ret.var()
+    beta = covariance / benchmark_variance if benchmark_variance > 0 else 1.0
+
+    # Alpha (Jensen's alpha)
+    years = len(common_dates) / 252
+    if years > 0:
+        portfolio_annual = (1 + portfolio_total) ** (1 / years) - 1
+        benchmark_annual = (1 + benchmark_total) ** (1 / years) - 1
+        alpha = portfolio_annual - (risk_free_rate + beta * (benchmark_annual - risk_free_rate))
+    else:
+        alpha = 0.0
+
+    # Information ratio (excess return / tracking error)
+    tracking_diff = port_ret - bench_ret
+    tracking_error = tracking_diff.std() * np.sqrt(252)
+    if tracking_error > 0 and years > 0:
+        information_ratio = (excess_return / years) / tracking_error
+    else:
+        information_ratio = 0.0
+
+    return {
+        "benchmark_return": float(benchmark_total),
+        "excess_return": float(excess_return),
+        "alpha": float(alpha),
+        "beta": float(beta),
+        "information_ratio": float(information_ratio),
+    }
+
+
+def _get_rebalance_dates(
+    prices: pd.DataFrame,
+    frequency: str
+) -> pd.DatetimeIndex:
+    """
+    Get rebalancing dates based on frequency.
+
+    Args:
+        prices: Price DataFrame
+        frequency: Rebalancing frequency
+
+    Returns:
+        DatetimeIndex of rebalancing dates
+    """
+    if frequency == "none":
+        return pd.DatetimeIndex([prices.index[0]])
+
+    freq_map = {
+        "weekly": "W",
+        "monthly": "ME",
+        "quarterly": "QE",
+        "semi-annual": "6ME",
+        "annual": "YE",
+    }
+
+    pandas_freq = freq_map.get(frequency, "ME")
+
+    # Get end-of-period dates, then find the next trading day
+    rebalance_dates = prices.resample(pandas_freq).last().index
+
+    # Filter to only include dates in our price data
+    valid_dates = rebalance_dates.intersection(prices.index)
+
+    # If no valid dates, use first date
+    if len(valid_dates) == 0:
+        return pd.DatetimeIndex([prices.index[0]])
+
+    return valid_dates
+
+
+def _simulate_portfolio(
+    prices: pd.DataFrame,
+    target_weights: dict[str, float],
+    config: dict,
+    initial_capital: float
+) -> tuple[pd.Series, dict]:
+    """
+    Simulate portfolio with rebalancing and risk controls.
+
+    Args:
+        prices: Price DataFrame (columns = tickers)
+        target_weights: Target allocation weights
+        config: Backtest configuration
+        initial_capital: Starting capital
+
+    Returns:
+        Tuple of (portfolio values Series, metadata dict)
+    """
+    # Normalize weights
+    weight_sum = sum(target_weights.values())
+    weights = {k: v / weight_sum for k, v in target_weights.items()}
+
+    # Get config values
+    rebalance_frequency = config.get("rebalance_frequency", "monthly")
+    fees = config.get("fees", 0.001)
+    slippage = config.get("slippage", 0.0005)
+    stop_loss = config.get("stop_loss")
+    take_profit = config.get("take_profit")
+    trailing_stop = config.get("trailing_stop", False)
+    max_drawdown_limit = config.get("max_drawdown_limit")
+
+    # Get rebalance dates
+    rebalance_dates = _get_rebalance_dates(prices, rebalance_frequency)
+
+    # Initialize tracking variables
+    portfolio_values = []
+    current_shares = {}
+    total_fees_paid = 0.0
+    num_rebalances = 0
+    total_turnover = 0.0
+
+    # Risk management tracking
+    entry_prices = {}  # Track entry prices for stop-loss/take-profit
+    highest_prices = {}  # Track highest prices for trailing stop
+    peak_portfolio_value = initial_capital
+    is_liquidated = False
+    liquidation_reason = None
+
+    # Holding period tracking
+    holding_start_dates = {}
+
+    for i, date in enumerate(prices.index):
+        if is_liquidated:
+            # Portfolio was liquidated, maintain cash position
+            portfolio_values.append(portfolio_values[-1] if portfolio_values else initial_capital)
+            continue
+
+        current_prices = prices.loc[date]
+
+        # Calculate current portfolio value
+        if i == 0:
+            current_value = initial_capital
+        else:
+            current_value = sum(
+                current_shares.get(t, 0) * current_prices[t]
+                for t in weights if t in current_prices
+            )
+
+        # Update peak for drawdown calculation
+        if current_value > peak_portfolio_value:
+            peak_portfolio_value = current_value
+
+        # Check max drawdown limit
+        if max_drawdown_limit is not None:
+            current_drawdown = (peak_portfolio_value - current_value) / peak_portfolio_value
+            if current_drawdown > max_drawdown_limit:
+                is_liquidated = True
+                liquidation_reason = f"max_drawdown_exceeded ({current_drawdown:.2%})"
+                portfolio_values.append(current_value)
+                continue
+
+        # Check stop-loss / take-profit for each position
+        for ticker in list(current_shares.keys()):
+            if current_shares[ticker] <= 0:
+                continue
+
+            if ticker not in entry_prices:
+                continue
+
+            entry = entry_prices[ticker]
+            current = current_prices[ticker]
+
+            # Update highest price for trailing stop
+            if ticker not in highest_prices:
+                highest_prices[ticker] = current
+            else:
+                highest_prices[ticker] = max(highest_prices[ticker], current)
+
+            # Calculate return from entry
+            if trailing_stop and stop_loss is not None:
+                # Trailing stop: compare to highest price
+                return_from_high = (current - highest_prices[ticker]) / highest_prices[ticker]
+                if return_from_high < -stop_loss:
+                    # Sell this position
+                    sell_value = current_shares[ticker] * current * (1 - fees - slippage)
+                    total_fees_paid += current_shares[ticker] * current * (fees + slippage)
+                    current_shares[ticker] = 0
+                    del entry_prices[ticker]
+                    del highest_prices[ticker]
+            else:
+                return_from_entry = (current - entry) / entry
+
+                # Stop-loss check
+                if stop_loss is not None and return_from_entry < -stop_loss:
+                    sell_value = current_shares[ticker] * current * (1 - fees - slippage)
+                    total_fees_paid += current_shares[ticker] * current * (fees + slippage)
+                    current_shares[ticker] = 0
+                    del entry_prices[ticker]
+
+                # Take-profit check
+                if take_profit is not None and return_from_entry > take_profit:
+                    sell_value = current_shares[ticker] * current * (1 - fees - slippage)
+                    total_fees_paid += current_shares[ticker] * current * (fees + slippage)
+                    current_shares[ticker] = 0
+                    del entry_prices[ticker]
+
+        # Rebalancing
+        should_rebalance = (date in rebalance_dates) or (i == 0)
+
+        if should_rebalance and not is_liquidated:
+            # Recalculate current value after any stop-loss/take-profit
+            current_value = sum(
+                current_shares.get(t, 0) * current_prices[t]
+                for t in weights if t in current_prices
+            )
+            if i == 0:
+                current_value = initial_capital
+
+            # Calculate turnover
+            if current_shares and current_value > 0:
+                old_weights = {
+                    t: current_shares.get(t, 0) * current_prices[t] / current_value
+                    for t in weights if t in current_prices
+                }
+                turnover = sum(abs(weights[t] - old_weights.get(t, 0)) for t in weights) / 2
+                total_turnover += turnover
+
+            # Rebalance to target weights
+            for ticker in weights:
+                if ticker not in current_prices:
+                    continue
+
+                target_value = current_value * weights[ticker]
+                current_holding_value = current_shares.get(ticker, 0) * current_prices[ticker]
+                trade_value = abs(target_value - current_holding_value)
+
+                # Apply fees and slippage
+                if trade_value > 0:
+                    total_fees_paid += trade_value * (fees + slippage)
+
+                # Update shares
+                new_shares = target_value / current_prices[ticker]
+                current_shares[ticker] = new_shares
+
+                # Update entry price for new positions
+                if new_shares > 0:
+                    entry_prices[ticker] = current_prices[ticker]
+                    highest_prices[ticker] = current_prices[ticker]
+                    if ticker not in holding_start_dates:
+                        holding_start_dates[ticker] = date
+
+            num_rebalances += 1
+
+        # Calculate final portfolio value for the day
+        final_value = sum(
+            current_shares.get(t, 0) * current_prices[t]
+            for t in weights if t in current_prices
+        )
+        portfolio_values.append(final_value)
+
+    # Create portfolio value series
+    portfolio_series = pd.Series(portfolio_values, index=prices.index)
+
+    # Calculate holding periods
+    holding_periods = {}
+    end_date = prices.index[-1]
+    for ticker, start_date in holding_start_dates.items():
+        days = (end_date - start_date).days
+        holding_periods[ticker] = {
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "days": days,
+            "years": days / 365,
+            "is_long_term": days >= 365,  # For tax purposes
+        }
+
+    metadata = {
+        "total_fees_paid": total_fees_paid,
+        "num_rebalances": num_rebalances,
+        "turnover": total_turnover,
+        "is_liquidated": is_liquidated,
+        "liquidation_reason": liquidation_reason,
+        "holding_periods": holding_periods,
+    }
+
+    return portfolio_series, metadata
+
+
+def backtest_portfolio(
+    tickers: list[str],
+    weights: dict[str, float],
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    period: Optional[str] = None,
+    strategy: str = "passive_rebalance",
+    benchmark: Optional[str] = "SPY",
+    initial_capital: float = 10000.0,
+    custom_config: Optional[dict] = None
+) -> dict:
+    """
+    Backtest a portfolio with specified weights.
+
+    This tool evaluates how a portfolio would have performed historically,
+    including realistic transaction costs and rebalancing.
+
+    RECOMMENDED WORKFLOW:
+    1. First call optimize_portfolio_bl() to get optimal weights
+    2. Then call backtest_portfolio() with those weights to validate performance
+
+    Args:
+        tickers: List of ticker symbols in the portfolio
+        weights: Target weights from optimize_portfolio_bl output
+                 Example: {"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25}
+        start_date: Backtest start date (YYYY-MM-DD)
+        end_date: Backtest end date (YYYY-MM-DD)
+        period: Relative period ("1Y", "3Y", "5Y") - RECOMMENDED
+        strategy: Backtesting strategy preset
+                 - "buy_and_hold": No rebalancing, baseline comparison
+                 - "passive_rebalance": Monthly rebalancing (DEFAULT)
+                 - "risk_managed": Monthly rebalancing + stop-loss + drawdown limit
+        benchmark: Benchmark ticker for comparison (default: "SPY")
+                  Set to None to skip benchmark comparison
+        initial_capital: Starting capital (default: 10000)
+        custom_config: Advanced config to override strategy preset (dict)
+                      See BacktestConfig for available options
+
+    Returns:
+        Dictionary containing performance metrics, costs, and benchmark comparison
+    """
+    import logging
+    logging.warning("=" * 80)
+    logging.warning(f"🔍 backtest_portfolio CALLED:")
+    logging.warning(f"  📋 tickers = {tickers!r}")
+    logging.warning(f"  ⚖️ weights = {weights!r}")
+    logging.warning(f"  📅 period = {period!r}")
+    logging.warning(f"  🎯 strategy = {strategy!r}")
+    logging.warning("=" * 80)
+
+    # Validate inputs
+    validators.validate_tickers(tickers)
+
+    if not weights:
+        raise ValueError("weights cannot be empty")
+
+    # Check all weight tickers are in tickers list
+    missing = set(weights.keys()) - set(tickers)
+    if missing:
+        raise ValueError(f"Tickers in weights not in tickers list: {missing}")
+
+    # Validate weights are positive
+    for ticker, weight in weights.items():
+        if weight < 0:
+            raise ValueError(f"Weight for {ticker} cannot be negative: {weight}")
+
+    # Get configuration from strategy or custom_config
+    if custom_config is not None:
+        # Use custom config (override strategy)
+        config = {**STRATEGY_PRESETS["passive_rebalance"], **custom_config}
+    else:
+        # Use strategy preset
+        if strategy not in STRATEGY_PRESETS:
+            raise ValueError(
+                f"Unknown strategy '{strategy}'. "
+                f"Available: {list(STRATEGY_PRESETS.keys())}"
+            )
+        config = STRATEGY_PRESETS[strategy]
+
+    # Resolve date range
+    start_date, end_date = validators.resolve_date_range(
+        period=period,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    # Load price data
+    all_tickers = list(set(tickers) | ({benchmark} if benchmark else set()))
+    prices = data_loader.load_prices(all_tickers, start_date, end_date)
+
+    # Separate benchmark
+    benchmark_prices = None
+    if benchmark and benchmark in prices.columns:
+        benchmark_prices = prices[benchmark]
+
+    # Get portfolio prices only
+    portfolio_tickers = [t for t in tickers if t in prices.columns]
+    if len(portfolio_tickers) == 0:
+        raise ValueError(f"No valid tickers found in data: {tickers}")
+
+    portfolio_prices = prices[portfolio_tickers]
+
+    # Filter weights to only include available tickers
+    available_weights = {t: weights[t] for t in portfolio_tickers if t in weights}
+
+    # Simulate portfolio
+    portfolio_values, metadata = _simulate_portfolio(
+        portfolio_prices,
+        available_weights,
+        config,
+        initial_capital
+    )
+
+    # Calculate returns
+    portfolio_returns = portfolio_values.pct_change().dropna()
+
+    # Calculate performance metrics
+    metrics = _calculate_returns_metrics(portfolio_returns)
+
+    # Add portfolio values
+    metrics["initial_capital"] = initial_capital
+    metrics["final_value"] = float(portfolio_values.iloc[-1])
+
+    # Add cost and trading info
+    metrics["total_fees_paid"] = metadata["total_fees_paid"]
+    metrics["num_rebalances"] = metadata["num_rebalances"]
+    metrics["turnover"] = metadata["turnover"]
+
+    # Add risk management info
+    metrics["is_liquidated"] = metadata["is_liquidated"]
+    metrics["liquidation_reason"] = metadata["liquidation_reason"]
+
+    # Add holding periods (for tax calculation)
+    metrics["holding_periods"] = metadata["holding_periods"]
+
+    # Benchmark comparison
+    if benchmark_prices is not None:
+        benchmark_returns = benchmark_prices.pct_change().dropna()
+        benchmark_metrics = _calculate_benchmark_metrics(
+            portfolio_returns,
+            benchmark_returns
+        )
+        metrics.update(benchmark_metrics)
+
+    # Period info
+    metrics["period"] = {
+        "start": start_date,
+        "end": end_date or portfolio_prices.index[-1].strftime("%Y-%m-%d"),
+        "trading_days": len(portfolio_prices),
+    }
+
+    # Strategy info
+    metrics["strategy"] = strategy
+    metrics["config"] = config
+
+    return metrics

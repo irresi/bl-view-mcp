@@ -61,16 +61,28 @@ dev = ["pytest", "mypy", "ruff"]        # 개발용
 
 ## Current Architecture (2025-11-23)
 
-### Single Tool Design
+### MCP Tools
 
-**MCP Tool**: `optimize_portfolio_bl` 하나만 노출
+| Tool | 용도 | 비고 |
+|------|------|------|
+| `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구 |
+| `upload_price_data` | 커스텀 가격 데이터 업로드 | 소량 데이터용 |
+| `upload_price_data_from_file` | 파일에서 가격 데이터 로드 | 대량 데이터용 |
+| `list_available_tickers` | 사용 가능 티커 조회 | 검색/필터 지원 |
 
 ```
 server.py (@mcp.tool)
-    └── tools.py (business logic)
-            ├── _parse_views()      # P, Q 파싱
-            ├── _normalize_confidence()  # float/list 정규화
-            └── BlackLittermanModel(omega="idzorek")
+    ├── optimize_portfolio_bl()
+    │       └── tools.py (business logic)
+    │               ├── _parse_views()
+    │               ├── _normalize_confidence()
+    │               └── BlackLittermanModel(omega="idzorek")
+    ├── upload_price_data()
+    │       └── data_loader.save_custom_price_data()
+    ├── upload_price_data_from_file()
+    │       └── data_loader.load_and_save_from_file()
+    └── list_available_tickers()
+            └── data_loader.list_tickers()
 ```
 
 **이전 구조에서 삭제됨**:
@@ -204,6 +216,66 @@ make web-ui         # localhost:8000에서 ADK Web UI 시작
 2. **Parquet 캐싱**: 한 번 가져온 시가총액은 `data/market_caps.parquet`에 저장
 3. **Ticker 정렬 제거**: 사용자 입력 순서 유지
 4. **Type hint 수정**: `confidence: float | list` (dict 제거)
+5. **커스텀 데이터 지원** (NEW):
+   - `upload_price_data`: 소량 가격 데이터 직접 업로드
+   - `upload_price_data_from_file`: CSV/Parquet 파일에서 로드
+   - `list_available_tickers`: 사용 가능 티커 조회
+
+## Custom Data Support
+
+### 사용 시나리오
+
+| 케이스 | 도구 | 예시 |
+|--------|------|------|
+| 소량 데이터 (< 100행) | `upload_price_data` | LLM이 데이터 전달 |
+| 대량 데이터 / 파일 | `upload_price_data_from_file` | CSV/Parquet 경로 |
+| 외부 MCP 연동 | 파일 경로 전달 | 다른 MCP가 파일 저장 → bl-mcp가 로드 |
+
+### 업로드 예시
+
+```python
+# 1. 직접 업로드 (소량)
+upload_price_data(
+    ticker="005930.KS",  # 삼성전자
+    prices=[
+        {"date": "2024-01-02", "close": 78000.0},
+        {"date": "2024-01-03", "close": 78500.0},
+        ...
+    ],
+    source="pykrx"
+)
+
+# 2. 파일에서 로드 (대량)
+upload_price_data_from_file(
+    ticker="KOSPI",
+    file_path="/path/to/kospi.csv",
+    date_column="Date",
+    close_column="Close"
+)
+
+# 3. 업로드 후 최적화
+optimize_portfolio_bl(
+    tickers=["005930.KS", "AAPL"],  # 커스텀 + 기존 티커 혼합
+    period="1Y"
+)
+```
+
+### 외부 MCP 연동 패턴
+
+```
+[외부 MCP: pykrx-mcp]          [bl-mcp]
+get_korean_stock_prices()  →  upload_price_data_from_file()
+  └── /tmp/005930.parquet        └── 내부 캐시로 복사
+
+optimize_portfolio_bl(["005930.KS", "AAPL"])
+```
+
+### 데이터 요구사항
+
+- 최소 10개 데이터 포인트 (권장: 60일+)
+- 날짜 형식: "YYYY-MM-DD"
+- 종가(close) 필드 필수
+- 커스텀 티커는 `data/custom_tickers.json`에 추적됨
 
 ## Known Issues
 

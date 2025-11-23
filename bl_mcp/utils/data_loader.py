@@ -360,3 +360,243 @@ def get_market_caps(
 
     # Return as Series in original ticker order
     return pd.Series({ticker: mcaps[ticker] for ticker in tickers})
+
+
+# Custom ticker tracking file
+CUSTOM_TICKERS_FILE = "data/custom_tickers.json"
+
+
+def save_custom_price_data(
+    ticker: str,
+    prices: list[dict],
+    source: str = "user",
+    data_dir: str = "data"
+) -> dict:
+    """
+    Save custom price data uploaded by user or external MCP.
+
+    Args:
+        ticker: Ticker symbol
+        prices: List of {"date": "YYYY-MM-DD", "close": float}
+        source: Source identifier for audit
+        data_dir: Directory to save data
+
+    Returns:
+        Result dict with success status and metadata
+    """
+    import json
+
+    # Validate input
+    if not prices:
+        raise ValueError("prices list cannot be empty")
+
+    if len(prices) < 10:
+        raise ValueError(
+            f"Minimum 10 data points required, got {len(prices)}. "
+            "For reliable optimization, 60+ days recommended."
+        )
+
+    # Parse and validate prices
+    records = []
+    for i, p in enumerate(prices):
+        if "date" not in p or "close" not in p:
+            raise ValueError(
+                f"Record {i} missing required fields. "
+                "Each record must have 'date' and 'close' keys."
+            )
+        try:
+            date = pd.to_datetime(p["date"])
+            close = float(p["close"])
+            records.append({"Date": date, "Close": close})
+        except Exception as e:
+            raise ValueError(f"Invalid data at record {i}: {e}")
+
+    # Create DataFrame
+    df = pd.DataFrame(records)
+    df = df.set_index("Date")
+    df = df.sort_index()
+
+    # Save to Parquet
+    data_path = Path(data_dir)
+    data_path.mkdir(parents=True, exist_ok=True)
+    file_path = data_path / f"{ticker}.parquet"
+    df.to_parquet(file_path)
+
+    # Track custom ticker
+    _register_custom_ticker(ticker, source, data_dir)
+
+    return {
+        "success": True,
+        "ticker": ticker,
+        "records": len(df),
+        "date_range": {
+            "start": df.index.min().strftime("%Y-%m-%d"),
+            "end": df.index.max().strftime("%Y-%m-%d")
+        },
+        "file_path": str(file_path),
+        "source": source
+    }
+
+
+def load_and_save_from_file(
+    ticker: str,
+    file_path: str,
+    date_column: str = "date",
+    close_column: str = "close",
+    source: str = "file",
+    data_dir: str = "data"
+) -> dict:
+    """
+    Load price data from external file and save to internal format.
+
+    Args:
+        ticker: Ticker symbol to use
+        file_path: Path to CSV or Parquet file
+        date_column: Column name for dates
+        close_column: Column name for close prices
+        source: Source identifier
+        data_dir: Directory to save data
+
+    Returns:
+        Result dict with success status and metadata
+    """
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    # Load based on file extension
+    if file_path.suffix.lower() == ".parquet":
+        df = pd.read_parquet(file_path)
+    elif file_path.suffix.lower() == ".csv":
+        df = pd.read_csv(file_path)
+    else:
+        raise ValueError(
+            f"Unsupported file format: {file_path.suffix}. "
+            "Supported: .csv, .parquet"
+        )
+
+    # Find columns (case-insensitive)
+    columns_lower = {c.lower(): c for c in df.columns}
+
+    date_col = columns_lower.get(date_column.lower())
+    close_col = columns_lower.get(close_column.lower())
+
+    if date_col is None:
+        raise ValueError(
+            f"Date column '{date_column}' not found. "
+            f"Available columns: {list(df.columns)}"
+        )
+    if close_col is None:
+        raise ValueError(
+            f"Close column '{close_column}' not found. "
+            f"Available columns: {list(df.columns)}"
+        )
+
+    # Convert to standard format
+    prices = [
+        {"date": str(row[date_col]), "close": float(row[close_col])}
+        for _, row in df.iterrows()
+    ]
+
+    return save_custom_price_data(ticker, prices, source, data_dir)
+
+
+def _register_custom_ticker(
+    ticker: str,
+    source: str,
+    data_dir: str = "data"
+) -> None:
+    """Register a custom ticker in tracking file."""
+    import json
+    from datetime import datetime
+
+    tracking_file = Path(data_dir) / "custom_tickers.json"
+
+    # Load existing
+    custom_tickers = {}
+    if tracking_file.exists():
+        try:
+            with open(tracking_file) as f:
+                custom_tickers = json.load(f)
+        except Exception:
+            pass
+
+    # Add/update ticker
+    custom_tickers[ticker] = {
+        "source": source,
+        "uploaded_at": datetime.now().isoformat()
+    }
+
+    # Save
+    tracking_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(tracking_file, "w") as f:
+        json.dump(custom_tickers, f, indent=2)
+
+
+def list_tickers(
+    dataset: str | None = None,
+    search: str | None = None,
+    data_dir: str = "data"
+) -> dict:
+    """
+    List available tickers.
+
+    Args:
+        dataset: Filter by dataset ("snp500", "nasdaq100", "etf", "crypto", "custom")
+        search: Search pattern (case-insensitive)
+        data_dir: Data directory
+
+    Returns:
+        Dict with tickers list and metadata
+    """
+    import json
+
+    data_path = Path(data_dir)
+
+    # Get all parquet files
+    all_tickers = []
+    if data_path.exists():
+        all_tickers = [
+            f.stem for f in data_path.glob("*.parquet")
+            if not f.stem.startswith(".")
+            and f.stem != "market_caps"
+        ]
+
+    # Load custom tickers list
+    custom_tickers = {}
+    tracking_file = data_path / "custom_tickers.json"
+    if tracking_file.exists():
+        try:
+            with open(tracking_file) as f:
+                custom_tickers = json.load(f)
+        except Exception:
+            pass
+
+    custom_ticker_list = list(custom_tickers.keys())
+
+    # Filter by dataset
+    result_tickers = all_tickers
+
+    if dataset == "custom":
+        result_tickers = custom_ticker_list
+    elif dataset is not None:
+        # For specific datasets, we'd need a mapping
+        # For now, exclude custom tickers for non-custom datasets
+        result_tickers = [t for t in all_tickers if t not in custom_ticker_list]
+
+    # Apply search filter
+    if search:
+        search_lower = search.lower()
+        result_tickers = [t for t in result_tickers if search_lower in t.lower()]
+
+    # Sort alphabetically
+    result_tickers = sorted(result_tickers)
+
+    return {
+        "tickers": result_tickers,
+        "count": len(result_tickers),
+        "datasets": list(DATASET_CONFIGS.keys()) + ["custom"],
+        "custom_tickers": custom_ticker_list,
+        "custom_count": len(custom_ticker_list)
+    }

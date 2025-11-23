@@ -190,6 +190,92 @@ def test_multiple_views():
         print(f"\n❌ Failed: {e}")
 
 
+def test_upload_price_data():
+    """Test custom price data upload."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Upload Custom Price Data")
+    print("=" * 60)
+
+    from bl_mcp.utils import data_loader
+    import tempfile
+    import os
+
+    try:
+        # Generate fake price data (100 days)
+        import datetime
+        prices = []
+        base_price = 100.0
+        start_date = datetime.date(2024, 1, 1)
+
+        for i in range(100):
+            date = start_date + datetime.timedelta(days=i)
+            # Skip weekends
+            if date.weekday() >= 5:
+                continue
+            # Random walk
+            base_price *= (1 + (hash(str(date)) % 100 - 50) / 1000)
+            prices.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "close": round(base_price, 2)
+            })
+
+        # Use temp directory for test
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = data_loader.save_custom_price_data(
+                ticker="TEST_CUSTOM",
+                prices=prices,
+                source="test",
+                data_dir=tmpdir
+            )
+
+            print("\n✅ Upload Success!")
+            print(f"  Ticker: {result['ticker']}")
+            print(f"  Records: {result['records']}")
+            print(f"  Date Range: {result['date_range']['start']} to {result['date_range']['end']}")
+            print(f"  File: {result['file_path']}")
+
+            # Test list_tickers
+            tickers_result = data_loader.list_tickers(data_dir=tmpdir)
+            print(f"\n📋 Available Tickers: {tickers_result['tickers']}")
+            print(f"  Custom Tickers: {tickers_result['custom_tickers']}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def test_list_available_tickers():
+    """Test listing available tickers."""
+
+    print("\n" + "=" * 60)
+    print("TEST: List Available Tickers")
+    print("=" * 60)
+
+    from bl_mcp.utils import data_loader
+
+    try:
+        result = data_loader.list_tickers()
+
+        print("\n✅ Success!")
+        print(f"  Total Tickers: {result['count']}")
+        print(f"  Available Datasets: {result['datasets']}")
+        print(f"  Custom Tickers: {result['custom_count']}")
+
+        if result['count'] > 0:
+            print(f"\n  Sample Tickers (first 10):")
+            for ticker in result['tickers'][:10]:
+                print(f"    - {ticker}")
+
+        # Test search
+        search_result = data_loader.list_tickers(search="AAPL")
+        print(f"\n  Search 'AAPL': {search_result['tickers']}")
+
+    except Exception as e:
+        print(f"\n❌ Failed: {e}")
+
+
 if __name__ == "__main__":
     print("\n🧪 Black-Litterman Tools - Simple Tests\n")
 
@@ -199,6 +285,8 @@ if __name__ == "__main__":
     test_optimize_with_numpy_p()
     test_investment_styles()
     test_multiple_views()
+    test_upload_price_data()
+    test_list_available_tickers()
 
     print("\n" + "=" * 60)
     print("✅ All tests completed!")

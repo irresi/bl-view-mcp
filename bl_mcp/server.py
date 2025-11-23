@@ -8,6 +8,7 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, Field, field_validator
 
 from . import tools
+from .utils import data_loader
 
 # Initialize FastMCP server
 mcp = FastMCP("black-litterman-portfolio")
@@ -298,3 +299,166 @@ def optimize_portfolio_bl(
         investment_style=investment_style.value,
         risk_aversion=risk_aversion
     )
+
+
+@mcp.tool()
+def upload_price_data(
+    ticker: str,
+    prices: list[dict],
+    source: str = "user"
+) -> dict:
+    """
+    Upload custom price data for assets not available in pre-loaded datasets.
+
+    Use this tool when you need to work with:
+    - International stocks (Korean, Japanese, European markets)
+    - Alternative assets (commodities, real estate)
+    - Custom indices or benchmarks
+    - Data from external sources or other MCP servers
+
+    The uploaded data will be saved as a Parquet file and can be used
+    immediately with optimize_portfolio_bl.
+
+    Args:
+        ticker: Ticker symbol to use (e.g., "005930.KS" for Samsung Electronics)
+                This will be the identifier used in optimize_portfolio_bl
+        prices: List of price data dictionaries, each containing:
+                - date: Date string in "YYYY-MM-DD" format
+                - close: Closing price (float)
+
+                Example:
+                [
+                    {"date": "2024-01-02", "close": 78000.0},
+                    {"date": "2024-01-03", "close": 78500.0},
+                    {"date": "2024-01-04", "close": 77800.0}
+                ]
+
+                Requirements:
+                - Minimum 60 data points recommended
+                - Dates should be in chronological order
+                - No missing values allowed
+
+        source: Source identifier for audit trail (e.g., "user", "pykrx", "external_mcp")
+                Default: "user"
+
+    Returns:
+        Dictionary containing:
+        - success: True if upload successful
+        - ticker: The ticker symbol saved
+        - records: Number of records saved
+        - date_range: Start and end dates of the data
+        - file_path: Path to the saved Parquet file
+        - source: Source identifier
+
+    Examples:
+        # Korean stock data (삼성전자)
+        upload_price_data(
+            ticker="005930.KS",
+            prices=[
+                {"date": "2024-01-02", "close": 78000.0},
+                {"date": "2024-01-03", "close": 78500.0},
+                ...
+            ],
+            source="pykrx"
+        )
+
+        # After upload, use in optimization:
+        optimize_portfolio_bl(
+            tickers=["005930.KS", "AAPL"],
+            period="1Y"
+        )
+    """
+    return data_loader.save_custom_price_data(ticker, prices, source)
+
+
+@mcp.tool()
+def upload_price_data_from_file(
+    ticker: str,
+    file_path: str,
+    date_column: str = "date",
+    close_column: str = "close",
+    source: str = "file"
+) -> dict:
+    """
+    Upload custom price data from a CSV or Parquet file.
+
+    Use this tool when:
+    - External MCP server saved data to a file
+    - User has data in CSV/Parquet format
+    - Batch uploading large datasets
+
+    Args:
+        ticker: Ticker symbol to use (e.g., "CUSTOM_INDEX")
+        file_path: Absolute path to CSV or Parquet file
+        date_column: Column name for dates (default: "date")
+        close_column: Column name for closing prices (default: "close")
+        source: Source identifier (default: "file")
+
+    Returns:
+        Dictionary with upload results (same as upload_price_data)
+
+    Examples:
+        # From CSV file
+        upload_price_data_from_file(
+            ticker="KOSPI",
+            file_path="/path/to/kospi_data.csv",
+            date_column="Date",
+            close_column="Close"
+        )
+
+        # From Parquet file (typically from another MCP)
+        upload_price_data_from_file(
+            ticker="BTC-KRW",
+            file_path="/tmp/crypto_data.parquet"
+        )
+    """
+    return data_loader.load_and_save_from_file(
+        ticker, file_path, date_column, close_column, source
+    )
+
+
+@mcp.tool()
+def list_available_tickers(
+    dataset: Optional[str] = None,
+    search: Optional[str] = None
+) -> dict:
+    """
+    List all available tickers that can be used with optimize_portfolio_bl.
+
+    Use this tool to:
+    - Check what assets are available before optimization
+    - Search for specific tickers
+    - See which custom assets have been uploaded
+
+    Args:
+        dataset: Filter by dataset (optional)
+                 - "snp500": S&P 500 stocks
+                 - "nasdaq100": NASDAQ 100 stocks
+                 - "etf": Popular ETFs
+                 - "crypto": Cryptocurrencies
+                 - "custom": User-uploaded data
+                 - None: All available tickers
+        search: Search pattern (case-insensitive substring match)
+                Examples: "AAPL", "tech", "crypto"
+
+    Returns:
+        Dictionary containing:
+        - tickers: List of available ticker symbols
+        - count: Total number of tickers
+        - datasets: Available dataset categories
+        - custom_tickers: List of user-uploaded tickers (if any)
+
+    Examples:
+        # List all available tickers
+        list_available_tickers()
+
+        # List only S&P 500 stocks
+        list_available_tickers(dataset="snp500")
+
+        # Search for Apple-related tickers
+        list_available_tickers(search="AAPL")
+
+        # List custom uploaded data
+        list_available_tickers(dataset="custom")
+    """
+    return data_loader.list_tickers(dataset=dataset, search=search)

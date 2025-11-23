@@ -76,3 +76,4 @@ logs/
 
 # Docker
 .docker/
+bl_mcp/_version.py

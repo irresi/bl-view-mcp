@@ -2,95 +2,81 @@
 
 ## 현재 상태 (2025-11-23)
 
-**Phase**: Phase 1 완료 + 시가총액 자동 로드
-**초점**: Single Tool 설계, 시가총액 자동화
+**Phase**: Phase 1 완료, Phase 2 범위 확정
+**초점**: 프로젝트 분리 결정, backtest_portfolio 구현 준비
 
 ---
 
-## 최신 변경사항 (2025-11-23 오후)
+## 핵심 결정 (2025-11-23 저녁)
 
-### 시가총액 자동 로드 구현
+### 프로젝트 분리
 
-**`market_caps` 파라미터 제거** → 자동으로 시가총액 가져옴
+| 프로젝트 | 역할 | 기술 |
+|----------|------|------|
+| **bl-mcp** (이 프로젝트) | MCP Tool 라이브러리 | FastMCP, PyPortfolioOpt |
+| **bl-orchestrator** (별도) | Multi-agent view generation | CrewAI |
 
-```python
-# ❌ 이전 (수동)
-optimize_portfolio_bl(tickers, market_caps={"AAPL": 3e12, ...})
+### Phase 2 범위 축소
 
-# ✅ 현재 (자동)
-optimize_portfolio_bl(tickers)  # 시가총액 자동 로드
+**포함**:
+- `backtest_portfolio` - 포트폴리오 백테스팅
+- `calculate_hrp_weights` - HRP 최적화 (선택)
+
+**제외** (bl-orchestrator로 이동):
+- ~~`generate_views_from_technicals`~~
+- ~~`generate_views_from_fundamentals`~~
+- ~~`generate_views_from_sentiment`~~
+- ~~`get_market_data`~~
+- ~~`calculate_factor_scores`~~
+
+### View Generation 전략 변경
+
+**이전 계획** (폐기):
+```
+기술지표/펀더멘탈 → 규칙 기반 로직 → P, Q, confidence
+                   ↑ 자의적, 정당화 어려움
 ```
 
-**동작 흐름**:
-1. `data/market_caps.parquet` 캐시 확인
-2. 없으면 yfinance에서 다운로드
-3. 성공 시 Parquet에 캐싱
-4. 실패 시 equal weight fallback
+**새 접근** (채택):
+```
+Multi-agent debate → LLM reasoning → P, Q, confidence
+                     ↑ LLM이 직접 판단
+```
 
-**변경 파일**:
-- `bl_mcp/utils/data_loader.py`: `get_market_caps()` 함수 추가
-- `bl_mcp/tools.py`: `market_caps` 파라미터 제거
-- `bl_mcp/server.py`: MCP 인터페이스 업데이트
+**이유**:
+1. "AAPL이 10% 오른다" 같은 절대 뷰는 예측 불가능
+2. "AAPL이 MSFT보다 나을 것" 같은 상대 뷰는 LLM 토론으로 정당화 가능
+3. 규칙 기반 로직은 자의적 (RSI < 30 → 매수? 왜 30?)
 
 ---
 
-## 핵심 아키텍처 (2025-11-23)
-
-### 1. MCP Tool 간소화
-
-| 이전 | 현재 |
-|------|------|
-| 4개 Tool | **1개 Tool만** |
-| `market_caps` 수동 | **자동 로드** |
-
-### 2. Views 형식 (P, Q Only)
-
-```python
-views = {"P": [{"AAPL": 1}], "Q": [0.10]}           # Absolute
-views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}  # Relative
-views = {"P": [[1, -1, 0]], "Q": [0.20]}            # NumPy
-```
-
-### 3. 시가총액 자동화
-
-```python
-# data_loader.py
-get_market_caps(tickers)
-# 1. Parquet 캐시 → 2. yfinance → 3. equal weight fallback
-```
-
----
-
-## 테스트 결과
+## 예상 워크플로우 (Phase 2 완료 후)
 
 ```
-✅ Basic Optimization (No Views) - 시가총액 기반 가중치
-✅ Absolute View (AAPL +10%)
-✅ Relative View (NVDA > AAPL 20%)
-✅ NumPy P Format
-✅ Investment Styles
-✅ Multiple Views + Per-View Confidence
-```
+bl-orchestrator:
+1. 데이터 수집 (yfinance, ccxt)
+2. Agent Debate (Bull vs Bear vs Moderator)
+3. 합의된 Views 출력: {"P": [...], "Q": [...], "confidence": [...]}
 
-yfinance에서 시가총액 자동 로드 확인:
-```
-📥 Fetching market caps from yfinance: ['AAPL', 'MSFT', 'GOOGL']
-📥 Fetching market caps from yfinance: ['NVDA']  # 캐시에 없는 것만
+bl-mcp:
+4. optimize_portfolio_bl(tickers, views=debate_output)
+5. backtest_portfolio(tickers, weights=result)
 ```
 
 ---
 
-## 알려진 이슈
+## GitHub Issue 업데이트
 
-- **SPY.parquet 없음**: `investment_style` 효과 없음 (fallback δ=2.5)
+Issue #11에 결정 사항 코멘트 추가됨:
+https://github.com/irresi/bl-view-mcp/issues/11#issuecomment-3567495975
 
 ---
 
 ## 다음 단계
 
-- [ ] SPY 데이터 다운로드
-- [ ] README.md 업데이트
-- [x] ~~시가총액 자동 로드~~ ✅
+- [ ] `backtest_portfolio` 구현
+- [ ] `calculate_hrp_weights` 구현 (선택)
+- [ ] bl-orchestrator 프로젝트 생성 (별도)
 
 ---
 

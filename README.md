@@ -197,8 +197,14 @@ views = {"P": [[1, -1, 0]], "Q": [0.20]}  # 인덱스 기반
 
 ### 2. 계획된 Tools (Phase 2)
 
-- `backtest_portfolio` - 포트폴리오 백테스팅
-- `calculate_hrp_weights` - HRP 최적화
+| Tool | 상태 | 설명 |
+|------|------|------|
+| `backtest_portfolio` | 🆕 구현 예정 | 포트폴리오 백테스팅 |
+| `calculate_hrp_weights` | 🆕 선택사항 | HRP 최적화 (BL 대안) |
+
+**프로젝트 분리 결정** (2025-11-23):
+- **bl-mcp**: MCP Tool만 제공 (순수 라이브러리)
+- **bl-orchestrator**: Multi-agent view generation (별도 프로젝트, CrewAI)
 
 ---
 
@@ -397,51 +403,32 @@ views = {"P": [[1, -1, 0]], "Q": [0.20]}  # 인덱스 기반
 
 ---
 
-### Phase 2: 기능 확장 (백테스팅 및 전략 다각화)
+### Phase 2: 백테스팅 및 HRP (범위 축소됨)
 
-**목표**: 백테스팅 기능을 추가하여 전략을 검증하고, HRP 및 팩터 모델을 통합하여 Prior와 Likelihood를 다양화합니다.
+**목표**: 백테스팅 기능을 추가하여 전략을 검증하고, HRP를 BL 대안으로 제공합니다.
 
-- [ ] **백테스팅 Tool 구현**
+**프로젝트 분리 결정** (2025-11-23):
+- View generation 기능은 별도 프로젝트 (`bl-orchestrator`)로 분리
+- 이 프로젝트는 순수 MCP Tool 라이브러리로 유지
 
-  - [ ] **Tool 1.5**: `backtest_portfolio`
-    - 백테스팅 엔진: **`VectorBT`** (포트폴리오 리밸런싱 지원) 또는 **직접 구현**
-      - VectorBT: 다중 자산 포트폴리오에 최적화, 리밸런싱 내장
-      - 직접 구현: 간단한 경우, pandas + empyrical 조합
-    - 성과 지표: **`empyrical`** 라이브러리 활용 (업계 표준)
-      - **수익률**: Total Return, Annualized Return, CAGR
-      - **위험**: Volatility, Max Drawdown, Downside Deviation, VaR, CVaR
-      - **위험조정수익률**: Sharpe, Sortino, Calmar, Information Ratio
-      - **벤치마크 비교**: Alpha, Beta, Tracking Error, Active Return
-      - **거래 통계**: Win Rate, Avg Win/Loss, Profit Factor, Recovery Factor
-    - 리밸런싱: monthly, quarterly, yearly 지원
-    - 참고: Backtesting.py는 개별 종목 전략용이므로 포트폴리오에는 부적합
-- [ ] **추가 Tools 구현**
+- [ ] **Tool 1.5**: `backtest_portfolio`
+  - 백테스팅 엔진: pandas + empyrical (또는 VectorBT)
+  - 성과 지표: Total Return, Sharpe, Max Drawdown, Alpha, Beta
+  - 리밸런싱: none, monthly, quarterly, yearly
+  - 벤치마크: SPY (기본)
 
-  - [ ] **Tool 1.6**: `get_market_data`
+- [ ] **Tool 1.6**: `calculate_hrp_weights` (선택사항)
+  - 라이브러리: `PyPortfolioOpt.hierarchical_portfolio.HRPOpt`
+  - 용도: Views 없이 분산 투자하고 싶을 때 BL 대안
 
-    - 데이터 소스: `yfinance.Ticker.info` + 로컬 Parquet
-    - 제공 정보: 시가총액, 섹터, PE ratio, 배당수익률 등
-  - [ ] **Tool 1.7**: `calculate_factor_scores`
-
-    - 라이브러리: 기존 `data.py` 로직 재사용
-    - 팩터: value, growth, momentum, quality, size
-    - 출력: composite_score, rank
-  - [ ] **Tool 1.8**: `calculate_hrp_weights`
-
-    - 라이브러리: `PyPortfolioOpt.hierarchical_portfolio.HRPOpt`
-    - 입력: tickers, start_date, end_date, lookback_days
-    - 출력: HRP 가중치, diversification_ratio
-- [ ] **Resources 구현** (선택사항)
-
-  - [ ] `portfolio://current` - 현재 최적화된 포트폴리오
-  - [ ] `data://prices/{ticker}` - 가격 데이터
-  - [ ] `data://factors/{ticker}` - 팩터 데이터
-  - [ ] `views://saved` - 저장된 견해 목록
+**제외됨** (bl-orchestrator로 이동):
+- ~~`get_market_data`~~ - LLM이 직접 필요 없음
+- ~~`calculate_factor_scores`~~ - Multi-agent debate로 대체
+- ~~View generation tools~~ - LLM reasoning으로 대체
 
 - [ ] **테스트**
-  - [ ] **시나리오 2: 팩터 기반 전략** 실행 (Windsurf)
-  - [ ] **시나리오 3: HRP + 블랙-리터만** 실행 (Windsurf)
-  - [ ] 성과 비교 및 검증
+  - [ ] backtest_portfolio 기본 테스트
+  - [ ] HRP vs BL 비교 테스트
 
 ---
 

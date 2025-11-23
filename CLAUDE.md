@@ -209,6 +209,63 @@ make web-ui         # localhost:8000에서 ADK Web UI 시작
 
 - SPY.parquet 없으면 `investment_style` 효과 없음 (fallback 2.5 사용)
 
+## Phase 2 계획 (2025-11-23 결정)
+
+### 프로젝트 분리 결정
+
+**bl-mcp (이 프로젝트)**: MCP Tool만 제공 (순수 라이브러리)
+**bl-orchestrator (별도 프로젝트)**: Multi-agent view generation (CrewAI)
+
+### Phase 2 범위 (축소됨)
+
+| Tool | 상태 | 설명 |
+|------|------|------|
+| `optimize_portfolio_bl` | ✅ 기존 | BL 최적화 |
+| `backtest_portfolio` | 🆕 신규 | 포트폴리오 백테스팅 |
+| `calculate_hrp_weights` | 🆕 선택 | HRP 최적화 (BL 대안) |
+
+**제외된 기능** (bl-orchestrator로 이동):
+- ~~`generate_views_from_technicals`~~
+- ~~`generate_views_from_fundamentals`~~
+- ~~`generate_views_from_sentiment`~~
+
+### View Generation 전략
+
+**결정**: Multi-agent debate로 View 생성
+
+```
+기존 계획 (복잡):
+  기술지표/펀더멘탈 → 규칙 기반 로직 → P, Q, confidence
+                     ↑ 자의적, 정당화 어려움
+
+새 접근 (단순 + 강력):
+  Multi-agent debate → LLM reasoning → P, Q, confidence
+                       ↑ LLM이 직접 판단
+```
+
+**이유**:
+1. 절대 뷰("AAPL이 10% 오른다")는 예측 거의 불가능
+2. 상대 뷰("AAPL이 MSFT보다 나을 것")는 논쟁으로 정당화 가능
+3. LLM이 데이터 보고 직접 토론 → 더 유연하고 설명 가능
+
+### 예상 워크플로우 (bl-orchestrator)
+
+```
+1. Data Collection: AAPL, MSFT 펀더멘탈/기술지표/뉴스
+
+2. Agent Debate:
+   Bull: "AAPL P/E 낮고 모멘텀 강함, MSFT 대비 15% 아웃퍼폼"
+   Bear: "AAPL 성장 둔화, MSFT 클라우드 강세, 5%가 현실적"
+   Moderator: "합의: AAPL > MSFT by 8%, confidence 65%"
+
+3. Output:
+   {"P": [{"AAPL": 1, "MSFT": -1}], "Q": [0.08], "confidence": [0.65]}
+
+4. bl-mcp 호출:
+   optimize_portfolio_bl(tickers, views=output)
+   backtest_portfolio(tickers, weights=result)
+```
+
 ## Reference
 
 상세 문서는 `memory-bank/` 참조:

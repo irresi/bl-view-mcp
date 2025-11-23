@@ -21,8 +21,8 @@ COPY scripts ./scripts
 COPY tests ./tests
 COPY start_http.py start_stdio.py ./
 
-# 의존성 설치
-RUN uv sync --extra agent
+# 의존성 설치 (agent + crypto + dev)
+RUN uv sync --extra agent --extra crypto --extra dev
 
 # 데이터 디렉토리 생성
 RUN mkdir -p /app/data

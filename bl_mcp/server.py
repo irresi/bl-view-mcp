@@ -168,7 +168,7 @@ def optimize_portfolio_bl(
                          - "conservative": δ × 2.0 (high diversification, low risk)
                            Natural language: "보수적인 투자", "conservative strategy"
                          
-                         Auto-calculates from SPY market data and adjusts by multiplier.
+                         Auto-calculates from portfolio market data and adjusts by multiplier.
                          Ignored if risk_aversion is manually specified.
                          
         risk_aversion: ⚠️ ADVANCED PARAMETER - DO NOT USE unless you are an expert

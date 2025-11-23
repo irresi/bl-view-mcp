@@ -5,9 +5,56 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from pypfopt import black_litterman, expected_returns, risk_models
-from pypfopt.black_litterman import BlackLittermanModel, market_implied_risk_aversion
+from pypfopt.black_litterman import BlackLittermanModel
 
 from .utils import data_loader, validators
+
+
+def _calculate_portfolio_risk_aversion(
+    prices: pd.DataFrame,
+    mcaps: pd.Series,
+    S: pd.DataFrame,
+    frequency: int = 252,
+    risk_free_rate: float = 0.02
+) -> float:
+    """
+    Calculate risk aversion using portfolio-based approach (Idzorek method).
+
+    Formula: δ = (E(r) - rf) / σ²_portfolio
+    where σ²_portfolio = w_mkt^T × Σ × w_mkt
+
+    This approach uses the actual portfolio's market cap weights and covariance,
+    rather than relying on a single market proxy (e.g., SPY).
+
+    Args:
+        prices: Historical price data for portfolio assets
+        mcaps: Market capitalizations for each asset
+        S: Covariance matrix (annualized, from Ledoit-Wolf shrinkage)
+        frequency: Trading days per year (default: 252)
+        risk_free_rate: Annual risk-free rate (default: 0.02)
+
+    Returns:
+        Risk aversion coefficient (δ)
+    """
+    # 1. Calculate market cap weights
+    w_mkt = mcaps / mcaps.sum()
+
+    # 2. Calculate portfolio variance: w^T × Σ × w
+    portfolio_var = float(w_mkt @ S @ w_mkt)
+
+    # 3. Calculate portfolio expected return (market cap weighted average)
+    returns = prices.pct_change().dropna()
+    mean_returns = returns.mean() * frequency  # Annualized
+    portfolio_return = float((w_mkt * mean_returns).sum())
+
+    # 4. Calculate risk aversion: δ = (E(r) - rf) / σ²
+    if portfolio_var <= 0:
+        return 2.5  # Fallback for edge case
+
+    delta = (portfolio_return - risk_free_rate) / portfolio_var
+
+    # Ensure reasonable bounds (typically 1-10 for equities)
+    return max(0.5, min(delta, 15.0))
 
 
 def _parse_views(views: dict, tickers: list[str]) -> tuple[np.ndarray, np.ndarray]:
@@ -321,38 +368,31 @@ def optimize_portfolio_bl(
 
     # Calculate risk aversion if not provided
     if risk_aversion is None:
-        # Calculate market-implied risk aversion from SPY (S&P 500)
-        try:
-            spy_data = data_loader.load_prices(["SPY"], start_date, end_date)
-            spy_prices = spy_data["SPY"]
+        # Calculate risk aversion using portfolio-based approach (Idzorek method)
+        # δ = (E(r) - rf) / σ²_portfolio
+        base_risk_aversion = _calculate_portfolio_risk_aversion(
+            prices,
+            mcaps,
+            S,  # Reuse already calculated covariance matrix
+            frequency=252,  # Trading days per year
+            risk_free_rate=0.02  # 2% annual risk-free rate
+        )
 
-            # Calculate market-implied δ using PyPortfolioOpt
-            base_risk_aversion = market_implied_risk_aversion(
-                spy_prices,
-                frequency=252,  # Trading days per year
-                risk_free_rate=0.02  # 2% annual risk-free rate
-            )
+        # Adjust based on investment style
+        style_multipliers = {
+            "aggressive": 0.5,    # δ × 0.5 (high concentration)
+            "balanced": 1.0,      # δ × 1.0 (market equilibrium)
+            "conservative": 2.0   # δ × 2.0 (high diversification)
+        }
 
-            # Adjust based on investment style
-            style_multipliers = {
-                "aggressive": 0.5,    # δ × 0.5 (high concentration)
-                "balanced": 1.0,      # δ × 1.0 (market equilibrium)
-                "conservative": 2.0   # δ × 2.0 (high diversification)
-            }
+        multiplier = style_multipliers.get(investment_style, 1.0)
+        risk_aversion = base_risk_aversion * multiplier
 
-            multiplier = style_multipliers.get(investment_style, 1.0)
-            risk_aversion = base_risk_aversion * multiplier
-
-            logging.warning(
-                f"  📊 Market-implied risk aversion (base): {base_risk_aversion:.3f}\n"
-                f"  🎨 Investment style: {investment_style} (×{multiplier})\n"
-                f"  🎯 Adjusted risk aversion: {risk_aversion:.3f}"
-            )
-        except Exception as e:
-            # Fallback to default if SPY data unavailable
-            logging.warning(f"⚠️ Could not calculate market-implied risk aversion: {e}")
-            logging.warning("⚠️ Using default risk_aversion=2.5")
-            risk_aversion = 2.5
+        logging.warning(
+            f"  📊 Portfolio-based risk aversion (base): {base_risk_aversion:.3f}\n"
+            f"  🎨 Investment style: {investment_style} (×{multiplier})\n"
+            f"  🎯 Adjusted risk aversion: {risk_aversion:.3f}"
+        )
 
     # Calculate market-implied prior returns
     market_prior = black_litterman.market_implied_prior_returns(

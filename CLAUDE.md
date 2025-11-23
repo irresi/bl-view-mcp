@@ -25,13 +25,18 @@ make install          # 기본 + agent extras
 uv sync               # 기본만
 uv sync --extra agent # agent extras 포함
 
-# 3. 샘플 데이터 다운로드
-make sample           # AAPL, MSFT, GOOGL
-make data-snp500      # S&P 500 전체 (503 tickers)
+# 3. 데이터 다운로드 (중요: 서버 시작 전에 실행!)
+make download-data      # S&P 500 (~500 종목, GitHub Release)
+make download-nasdaq100 # NASDAQ 100 (~100 종목)
+make download-etf       # ETF (~130 종목)
+make download-crypto    # Crypto (100 심볼, --extra crypto 필요)
 
 # 4. 테스트 실행
 make test-simple
 ```
+
+> ⚠️ **stdio 모드 주의**: 데이터 없이 서버 시작하면 자동 다운로드가 30초+ 걸릴 수 있음.
+> LLM이 타임아웃으로 연결을 끊을 수 있으므로 **반드시 사전 다운로드 권장**.
 
 ### Optional Dependencies
 

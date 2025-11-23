@@ -24,20 +24,29 @@ cd bl-view-mcp
 make install
 ```
 
-### 2. 데이터 다운로드 (자동)
+### 2. 데이터 다운로드
 
-**첫 실행 시 자동으로 다운로드됩니다!** 데이터가 없으면 GitHub Release에서 자동으로 503개 종목 데이터를 다운로드합니다.
+> ⚠️ **중요**: MCP 서버 시작 **전에** 데이터를 미리 다운로드하세요!
+>
+> stdio 모드에서 첫 실행 시 자동 다운로드가 30초 이상 걸리면 LLM이 타임아웃으로 연결을 종료할 수 있습니다.
 
-**수동 다운로드** (선택):
 ```bash
-# 옵션 A: 사전 패키징된 데이터 (빠름, 503개 종목, 49MB)
-make download-data
+# 권장: 서버 시작 전에 미리 다운로드
+make download-data      # S&P 500 (~500 종목)
 
-# 옵션 B: 샘플 데이터만 (3개 종목)
-make sample
+# 추가 데이터셋 (선택)
+make download-nasdaq100 # NASDAQ 100 (~100 종목)
+make download-etf       # ETF (~130 종목)
+make download-crypto    # Crypto (100 심볼, --extra crypto 필요)
 ```
 
-**요구사항**: 옵션 A는 [GitHub CLI](https://cli.github.com/) 필요 (`brew install gh`)
+**요구사항**: [GitHub CLI](https://cli.github.com/) 필요 (`brew install gh`)
+
+**대안** (소스에서 직접 다운로드):
+```bash
+make data-snp500    # yfinance에서 직접 다운로드 (느림)
+make sample         # 샘플 3종목만 (AAPL, MSFT, GOOGL)
+```
 
 ### 3. 테스트
 

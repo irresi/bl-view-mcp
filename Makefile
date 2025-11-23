@@ -1,4 +1,4 @@
-.PHONY: help install sync test test-simple test-agent clean sample data-snp500 download-data pack-data server-http server-stdio web-ui dev all docker-setup docker-shell docker-clean
+.PHONY: help install sync test test-simple test-agent clean sample data-snp500 data-nasdaq100 data-etf data-crypto data-all download-data download-nasdaq100 download-etf download-crypto pack-data server-http server-stdio web-ui dev all docker-setup docker-shell docker-clean
 
 # Default target
 help:
@@ -8,11 +8,20 @@ help:
 	@echo "  make install      - Install all dependencies (including agent extras)"
 	@echo "  make sync         - Sync dependencies only"
 	@echo ""
-	@echo "Data:"
-	@echo "  make sample       - Download sample data (AAPL, MSFT, GOOGL)"
-	@echo "  make data-snp500  - Download S&P 500 data (503 tickers)"
-	@echo "  make download-data - Download pre-packaged data from GitHub"
-	@echo "  make pack-data    - Pack data folder for sharing (creates tar.gz)"
+	@echo "Data (download from source):"
+	@echo "  make sample         - Download sample data (AAPL, MSFT, GOOGL)"
+	@echo "  make data-snp500    - Download S&P 500 data (~500 tickers)"
+	@echo "  make data-nasdaq100 - Download NASDAQ 100 data (~100 tickers)"
+	@echo "  make data-etf       - Download ETF data (~130 tickers)"
+	@echo "  make data-crypto    - Download Crypto data (100 symbols, requires --extra crypto)"
+	@echo "  make data-all       - Download all datasets"
+	@echo ""
+	@echo "Data (download from GitHub Release - faster):"
+	@echo "  make download-data      - Download S&P 500 from GitHub Release"
+	@echo "  make download-nasdaq100 - Download NASDAQ 100 from GitHub Release"
+	@echo "  make download-etf       - Download ETF from GitHub Release"
+	@echo "  make download-crypto    - Download Crypto from GitHub Release"
+	@echo "  make pack-data          - Pack data folder for sharing (creates tar.gz)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test              - Run basic tests (test-simple)"
@@ -62,19 +71,63 @@ sample:
 	@echo "✅ Sample data download complete!"
 
 data-snp500:
-	@echo "📊 Downloading S&P 500 data (503 tickers)..."
+	@echo "📊 Downloading S&P 500 data (~500 tickers)..."
 	uv run python scripts/download_sp500.py
 	@echo "✅ S&P 500 data download complete!"
 
-# Data sharing (temporary, will migrate to S3)
+data-nasdaq100:
+	@echo "📊 Downloading NASDAQ 100 data (~100 tickers)..."
+	uv run python scripts/download_nasdaq100.py
+	@echo "✅ NASDAQ 100 data download complete!"
+
+data-etf:
+	@echo "📊 Downloading ETF data (~130 tickers)..."
+	uv run python scripts/download_etf.py
+	@echo "✅ ETF data download complete!"
+
+data-crypto:
+	@echo "📊 Downloading Crypto data (100 symbols)..."
+	@echo "⚠️  Requires: uv sync --extra crypto"
+	uv run python scripts/download_crypto.py
+	@echo "✅ Crypto data download complete!"
+
+data-all: data-snp500 data-nasdaq100 data-etf data-crypto
+	@echo "✅ All datasets downloaded!"
+
+# Data sharing - Download from GitHub Release
 download-data:
-	@echo "📥 Downloading pre-packaged data from GitHub..."
+	@echo "📥 Downloading pre-packaged S&P 500 data from GitHub..."
 	@which gh >/dev/null 2>&1 || (echo "❌ GitHub CLI (gh) not installed. Run: brew install gh" && exit 1)
-	gh release download data-v1.0 -p "data.tar.gz" --clobber
+	gh release download data-snp500-latest -p "data.tar.gz" --clobber 2>/dev/null || \
+		gh release download data-v1.0 -p "data.tar.gz" --clobber
 	tar -xzf data.tar.gz
 	rm data.tar.gz
 	@echo "✅ Data download complete!"
 	@echo "📊 Downloaded $$(ls data/*.parquet 2>/dev/null | wc -l | tr -d ' ') parquet files"
+
+download-nasdaq100:
+	@echo "📥 Downloading pre-packaged NASDAQ 100 data from GitHub..."
+	@which gh >/dev/null 2>&1 || (echo "❌ GitHub CLI (gh) not installed. Run: brew install gh" && exit 1)
+	gh release download data-nasdaq100-latest -p "data.tar.gz" --clobber
+	tar -xzf data.tar.gz
+	rm data.tar.gz
+	@echo "✅ NASDAQ 100 data download complete!"
+
+download-etf:
+	@echo "📥 Downloading pre-packaged ETF data from GitHub..."
+	@which gh >/dev/null 2>&1 || (echo "❌ GitHub CLI (gh) not installed. Run: brew install gh" && exit 1)
+	gh release download data-etf-latest -p "data.tar.gz" --clobber
+	tar -xzf data.tar.gz
+	rm data.tar.gz
+	@echo "✅ ETF data download complete!"
+
+download-crypto:
+	@echo "📥 Downloading pre-packaged Crypto data from GitHub..."
+	@which gh >/dev/null 2>&1 || (echo "❌ GitHub CLI (gh) not installed. Run: brew install gh" && exit 1)
+	gh release download data-crypto-latest -p "data.tar.gz" --clobber
+	tar -xzf data.tar.gz
+	rm data.tar.gz
+	@echo "✅ Crypto data download complete!"
 
 pack-data:
 	@echo "📦 Packing data folder for sharing..."
@@ -88,7 +141,7 @@ pack-data:
 	@echo ""
 	@echo "📤 Next steps:"
 	@echo "  1. Go to: https://github.com/irresi/bl-view-mcp/releases/new"
-	@echo "  2. Create tag: data-v1.0 (or increment version)"
+	@echo "  2. Create tag: data-snp500-latest (or data-nyse-latest, etc.)"
 	@echo "  3. Upload: data.tar.gz"
 	@echo "  4. Collaborators can run: make download-data"
 

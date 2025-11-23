@@ -1,6 +1,6 @@
 [project]
 name = "black-litterman-mcp"
-version = "0.1.0"
+version = "0.1.5"
 description = "Black-Litterman Portfolio Optimization MCP Server"
 readme = "README.md"
 license = {text = "MIT"}
@@ -34,8 +34,8 @@ dependencies = [
 ]
 
 [project.scripts]
-bl-view-mcp = "start_stdio:main"
-bl-view-mcp-http = "start_http:main"
+bl-view-mcp = "bl_mcp.__main__:main_stdio"
+bl-view-mcp-http = "bl_mcp.__main__:main_http"
 
 [project.urls]
 Homepage = "https://github.com/irresi/bl-view-mcp"
@@ -47,6 +47,9 @@ Documentation = "https://github.com/irresi/bl-view-mcp#readme"
 agent = [
     "google-adk[a2a]==1.14.1",
     "google-genai>=1.38.0",
+]
+crypto = [
+    "ccxt>=4.0.0",
 ]
 dev = [
     "pytest>=7.4.0",

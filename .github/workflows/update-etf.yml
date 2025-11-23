@@ -1,0 +1,77 @@
+name: Update ETF Data
+
+on:
+  schedule:
+    # Run at 23:00 UTC on weekdays (after US market close, staggered)
+    - cron: '0 23 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: 'Full refresh (ignore existing data)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Download existing data (if incremental)
+        if: ${{ github.event.inputs.full_refresh != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download data-etf-latest -p "data.tar.gz" --clobber 2>/dev/null && \
+            tar -xzf data.tar.gz && rm data.tar.gz || \
+            echo "No existing data found, will do full download"
+
+      - name: Download ETF data
+        run: |
+          uv run python scripts/download_etf.py --start 2020-01-01
+          echo "Downloaded $(ls data/*.parquet 2>/dev/null | wc -l) parquet files"
+
+      - name: Pack data
+        run: |
+          tar -czvf data.tar.gz data/
+          ls -lh data.tar.gz
+
+      - name: Create/Update Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete data-etf-latest --yes 2>/dev/null || true
+
+          gh release create data-etf-latest \
+            --title "ETF Data (Auto-Updated)" \
+            --notes "Automatically updated ETF price data.
+
+          **Contents:**
+          - ~250 popular ETFs (SPY, QQQ, VTI, etc.)
+          - Sector, bond, commodity, international ETFs
+          - Daily OHLCV data from 2020-01-01
+
+          **Last Updated:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          **Usage:**
+          \`\`\`bash
+          make download-etf
+          \`\`\`" \
+            data.tar.gz

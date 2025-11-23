@@ -1,0 +1,77 @@
+name: Update NASDAQ 100 Data
+
+on:
+  schedule:
+    # Run at 22:00 UTC on weekdays (after US market close, staggered from S&P 500)
+    - cron: '0 22 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: 'Full refresh (ignore existing data)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Download existing data (if incremental)
+        if: ${{ github.event.inputs.full_refresh != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download data-nasdaq100-latest -p "data.tar.gz" --clobber 2>/dev/null && \
+            tar -xzf data.tar.gz && rm data.tar.gz || \
+            echo "No existing data found, will do full download"
+
+      - name: Download NASDAQ 100 data
+        run: |
+          uv run python scripts/download_nasdaq100.py --start 2020-01-01
+          echo "Downloaded $(ls data/*.parquet 2>/dev/null | wc -l) parquet files"
+
+      - name: Pack data
+        run: |
+          tar -czvf data.tar.gz data/
+          ls -lh data.tar.gz
+
+      - name: Create/Update Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete data-nasdaq100-latest --yes 2>/dev/null || true
+
+          gh release create data-nasdaq100-latest \
+            --title "NASDAQ 100 Data (Auto-Updated)" \
+            --notes "Automatically updated NASDAQ 100 price data.
+
+          **Contents:**
+          - ~100 NASDAQ 100 stocks (fetched from Wikipedia)
+          - NVDA, AAPL, MSFT, AMZN, META, GOOGL, etc.
+          - Daily OHLCV data from 2020-01-01
+
+          **Last Updated:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          **Usage:**
+          \`\`\`bash
+          make download-nasdaq100
+          \`\`\`" \
+            data.tar.gz

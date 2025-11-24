@@ -75,7 +75,7 @@ git push origin feature-branch
 
 ## Current Architecture (2025-11-24)
 
-### MCP Tools (6개)
+### MCP Tools (5개)
 
 | Tool | 용도 | 비고 |
 |------|------|------|
@@ -103,7 +103,7 @@ server.py (@mcp.tool)
 - ~~`calculate_var_egarch`~~ → `get_asset_stats`에 VaR 통합
 - ~~`upload_price_data_from_file`~~ → `upload_price_data`에 통합
 
-**설계 철학**: 도구 수 최소화 (6개), 파라미터로 기능 확장
+**설계 철학**: 도구 수 최소화 (5개), 파라미터로 기능 확장
 
 ### Key Parameters
 
@@ -445,7 +445,7 @@ make web-ui         # localhost:8000에서 ADK Web UI 시작
    - `upload_price_data_from_file` 기능 통합
    - `prices` 또는 `file_path` 중 하나 선택
 
-5. **도구 수 최적화**: 6개 → 6개 유지 (기능은 확장)
+5. **도구 수 최적화**: 5개 유지 (기능은 확장)
 
 ### 이전 업데이트 (2025-11-23)
 

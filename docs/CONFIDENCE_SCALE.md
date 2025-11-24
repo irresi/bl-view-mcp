@@ -1,62 +1,46 @@
 # Confidence Scale Guide
 
-## 확신도 스케일 (Confidence Scale)
+## Overview
 
-Black-Litterman 모델에서 확신도는 **투자자 견해가 포트폴리오에 얼마나 영향을 미칠지** 결정합니다.
+In the Black-Litterman model, confidence determines **how much your views influence the portfolio**.
 
-### 📊 확신도 스케일 (0.5 = 중립 기준점)
+### Confidence Scale (0.5 = Neutral Pivot)
 
 ```
-100% ■■■■■■■■■■ 절대 확실 (Absolute Certainty)
- 95% ■■■■■■■■■□ 매우 확신 (Very Confident) ← 거의 틀림없음
- 85% ■■■■■■■■□□ 확신 (Confident) ← 높은 신뢰도
- 75% ■■■■■■■□□□ 꽤 확신 (Quite Confident)
- 60% ■■■■■■□□□□ 약간 확신 (Somewhat Confident)
+100% ■■■■■■■■■■ Absolute Certainty
+ 95% ■■■■■■■■■□ Very Confident ← Almost certain
+ 85% ■■■■■■■■□□ Confident ← High reliability
+ 75% ■■■■■■■□□□ Quite Confident
+ 60% ■■■■■■□□□□ Somewhat Confident
 ────────────────────────────────────────────
- 50% ■■■■■□□□□□ 보통/중립 (Neutral) ← 기준점
+ 50% ■■■■■□□□□□ Neutral ← Pivot Point (Default)
 ────────────────────────────────────────────
- 40% ■■■■□□□□□□ 약간 불확실 (Somewhat Uncertain)
- 30% ■■■□□□□□□□ 불확실 (Uncertain)
- 10% ■□□□□□□□□□ 매우 불확실 (Very Uncertain) ← 거의 무의미
-  0% □□□□□□□□□□ 완전 무의미 (No Information)
+ 40% ■■■■□□□□□□ Somewhat Uncertain
+ 30% ■■■□□□□□□□ Uncertain
+ 10% ■□□□□□□□□□ Very Uncertain ← Almost meaningless
+  0% □□□□□□□□□□ No Information
 ```
 
-### 🎯 핵심 포인트
+### Key Points
 
-1. **50%는 중립 상태**
-   - 견해가 있지만 확신이 없음
-   - 포트폴리오에 최소한의 영향만 줌
-   - 기본값
+1. **50% is Neutral**
+   - You have a view but no strong conviction
+   - Minimal impact on portfolio
+   - Default value when not specified
 
-2. **60% 이상: 강한 견해**
-   - 견해가 실제로 포트폴리오에 영향을 줌
-   - 60%: 약간의 영향
-   - 75%: 중간 정도 영향
-   - 85%: 강한 영향
-   - 95%+: 매우 강한 영향
+2. **60%+ : Strong Views**
+   - Views actually influence the portfolio
+   - 60%: Slight influence
+   - 75%: Moderate influence
+   - 85%: Strong influence
+   - 95%+: Very strong influence
 
-3. **40% 이하: 약한 견해**
-   - 견해가 거의 무시됨
-   - 정보가 불확실하거나 신뢰할 수 없음
-   - 30% 이하는 사실상 무의미
+3. **40% and below: Weak Views**
+   - Views are mostly ignored
+   - Information is uncertain or unreliable
+   - 30% or below is practically meaningless
 
-## 📋 자연어 → 숫자 변환 표
-
-### 한국어
-
-| 표현 | 확신도 | 설명 |
-|------|--------|------|
-| 틀림없어, 절대 확실해 | 100% (1.0) | 완전히 확실 |
-| 매우 확신, 아주 확신 | 95% (0.95) | 거의 틀림없음 |
-| 확신해, 그럴 것 같아 | 85% (0.85) | 높은 신뢰도 |
-| 꽤 확신, 상당히 확신 | 75% (0.75) | 중상 수준 |
-| 약간 확신, 조금 확신 | 60% (0.6) | 반반보다 나은 정도 |
-| 보통, 잘 모름, 반반 | 50% (0.5) | **중립 (기준점)** |
-| 약간 불확실 | 40% (0.4) | 반반보다 못한 정도 |
-| 불확실, 별로 확신 없어 | 30% (0.3) | 낮은 신뢰도 |
-| 매우 불확실, 전혀 확신 없어 | 10% (0.1) | 거의 무의미 |
-
-### English
+## Natural Language → Number Conversion
 
 | Expression | Confidence | Description |
 |------------|------------|-------------|
@@ -65,143 +49,111 @@ Black-Litterman 모델에서 확신도는 **투자자 견해가 포트폴리오�
 | Confident, Sure | 85% (0.85) | High confidence |
 | Quite confident, Fairly sure | 75% (0.75) | Moderately high |
 | Somewhat confident, Slightly sure | 60% (0.6) | Slightly above neutral |
-| Neutral, Don't know, 50-50 | 50% (0.5) | **Neutral (Pivot)** |
+| Neutral, Don't know, 50-50 | 50% (0.5) | **Neutral (Default)** |
 | Somewhat uncertain, Not very sure | 40% (0.4) | Slightly below neutral |
 | Uncertain, Not sure | 30% (0.3) | Low confidence |
 | Very uncertain, No confidence | 10% (0.1) | Almost meaningless |
 
-## 🔧 입력 형식 (모두 동등하게 지원!)
+## Input Formats (All Supported)
 
-### 1. 퍼센트 (Percentage: 0-100)
+### 1. Percentage (0-100)
 
 ```python
 confidence=95   # 95%
 confidence=85   # 85%
-confidence=50   # 50% (중립)
+confidence=50   # 50% (neutral)
 ```
 
-### 2. 소수점 (Decimal: 0.0-1.0)
+### 2. Decimal (0.0-1.0)
 
 ```python
 confidence=0.95  # 95%
 confidence=0.85  # 85%
-confidence=0.5   # 50% (중립)
+confidence=0.5   # 50% (neutral)
 ```
 
-### 3. 퍼센트 문자열
+### 3. Per-View Confidence (List)
 
 ```python
-confidence="95%"
-confidence="85%"
-confidence="50%"
+# Different confidence for each view
+confidence=[0.9, 0.6]  # First view: 90%, Second view: 60%
 ```
 
-### 4. 소수점 문자열
+**All formats work identically!**
+- `70` = `0.7` → Both treated as 70%
+- `95` = `0.95` → Both treated as 95%
+
+## Usage Examples
+
+### Example 1: Strong View
 
 ```python
-confidence="0.95"
-confidence="0.85"
-confidence="0.5"
+# "I'm very confident AAPL will return 30%"
+optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    views={"P": [{"AAPL": 1}], "Q": [0.30]},
+    confidence=0.95  # "Very confident" → 95%
+)
+# Result: AAPL weight significantly increases
 ```
 
-**모든 형식이 동일하게 작동합니다!**
-- `70` = `0.7` = `"70%"` = `"0.7"` → 모두 70%로 처리
-- `95` = `0.95` = `"95%"` = `"0.95"` → 모두 95%로 처리
+### Example 2: Relative View
 
-## 💡 사용 예시
-
-### 예시 1: Absolute View (강한 견해)
-
-```
-사용자: "AAPL이 30% 수익 낼 것 같아. 매우 확신해!"
-
-Agent 변환:
-views={"P": [{"AAPL": 1}], "Q": [0.30]}
-confidence=0.95  # "매우 확신" → 95%
-
-결과: AAPL 비중이 크게 증가
+```python
+# "I'm quite confident NVDA will outperform AAPL by 20%"
+optimize_portfolio_bl(
+    tickers=["NVDA", "AAPL", "MSFT"],
+    views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]},
+    confidence=0.75  # "Quite confident" → 75%
+)
+# Result: NVDA weight increases, AAPL weight decreases
 ```
 
-### 예시 2: Relative View
+### Example 3: Neutral View
 
-```
-사용자: "NVDA가 AAPL보다 20% 더 나을 것 같아. 꽤 확신해."
-
-Agent 변환:
-views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
-confidence=0.75  # "꽤 확신" → 75%
-
-결과: NVDA 비중 증가, AAPL 비중 감소
-```
-
-### 예시 3: 중립 견해
-
-```
-사용자: "MSFT가 10% 수익 낼 것 같은데, 잘 모르겠어."
-
-Agent 변환:
-views={"P": [{"MSFT": 1}], "Q": [0.10]}
-confidence=0.5  # "잘 모르겠어" → 50% (중립)
-
-결과: 견해가 최소한만 반영됨
+```python
+# "I think MSFT might return 10%, but I'm not sure"
+optimize_portfolio_bl(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    views={"P": [{"MSFT": 1}], "Q": [0.10]},
+    confidence=0.5  # "Not sure" → 50% (neutral)
+)
+# Result: View has minimal impact
 ```
 
-## ⚠️ 주의사항
+## Best Practices
 
 ### DO ✅
 
-- 퍼센트로 입력: `70`, `80`, `95`
-- 자연어 사용: "매우 확신", "보통", "불확실"
-- 50%를 중립 상태로 이해
-- 높은 확신일수록 견해가 강하게 반영됨을 인지
+- Use percentage or decimal: `70`, `0.7`
+- Use list for per-view confidence: `[0.9, 0.6]`
+- Understand 50% as neutral state
+- Higher confidence = stronger view influence
 
 ### DON'T ❌
 
-- 1-5 사이 값 사용 (애매함): `confidence=2`
-- 100% 초과: `confidence=150`
-- 음수: `confidence=-10`
-- 자연어 그대로 전달: `confidence="확신"` (숫자로 변환 필요)
+- Use ambiguous values (1-5): `confidence=2`
+- Exceed 100%: `confidence=150`
+- Use negative values: `confidence=-10`
 
-## 🧪 테스트
+## Technical Background
 
-```bash
-# 확신도 타입 처리 테스트
-make test-confidence
-```
+### Omega Matrix
 
-테스트 결과:
-```
-✅ Very confident (95%): 95 (int) → 0.95
-✅ Confident (85%): 85 (int) → 0.85
-✅ Neutral (50%): 50 (int) → 0.5
-✅ Uncertain (30%): 30 (int) → 0.3
-✅ Very uncertain (10%): 10 (int) → 0.1
-```
+Confidence is used to calculate the **Omega matrix** (view uncertainty) in Black-Litterman:
 
-## 🎓 Black-Litterman 이론
+- **High confidence (85-95%)**: Small Omega → View strongly reflected
+- **Neutral confidence (50%)**: Medium Omega → View weakly reflected
+- **Low confidence (10-30%)**: Large Omega → View mostly ignored
 
-### Omega 행렬
+### Idzorek Method
 
-확신도는 Black-Litterman 모델의 **Omega 행렬** (견해의 불확실성)을 계산하는 데 사용됩니다:
-
-- **높은 확신도 (85-95%)**: Omega가 작음 → 견해가 강하게 반영
-- **중립 확신도 (50%)**: Omega가 중간 → 견해가 약하게 반영
-- **낮은 확신도 (10-30%)**: Omega가 큼 → 견해가 거의 무시됨
-
-### Idzorek 방법
-
-본 프로젝트는 Idzorek(2005) 방법을 사용하여 확신도를 Omega로 변환합니다:
-- 직관적인 확신도 입력 (0-100%)
-- 자동으로 최적의 Omega 계산
-- Black-Litterman 사후 분포 생성
-
-## 📚 참고 자료
-
-- [Black-Litterman Model Overview](https://en.wikipedia.org/wiki/Black%E2%80%93Litterman_model)
-- Idzorek, T. (2005). "A Step-by-Step Guide to the Black-Litterman Model"
-- 프로젝트 문서: `memory-bank/productContext.md`
+This project uses the Idzorek (2005) method to convert confidence to Omega:
+- Intuitive confidence input (0-100%)
+- Automatic optimal Omega calculation
+- `omega="idzorek"` in BlackLittermanModel
 
 ---
 
-**Version**: 2.0 (Improved Scale with 0.5 Neutral Pivot)
-**Last Updated**: 2025-11-22
+**Version**: 3.0 (English, Updated for v0.3.x)
+**Last Updated**: 2025-11-25

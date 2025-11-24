@@ -1,201 +1,58 @@
-# Relative View Support - Implementation Summary
+# Relative View Support
 
-**Date**: 2025-11-22  
-**Status**: ✅ Implemented and Tested  
-**Issue**: [Feat: Relative view 지원](https://github.com/irresi/bl-view-mcp/issues/TBD)
+## Overview
 
-## 📋 Overview
+Unified view interface for Black-Litterman model with dict-based P matrix support, enabling relative views while maintaining full backward compatibility.
 
-Implemented unified view interface for Black-Litterman model with dict-based P matrix support, enabling relative views while maintaining full backward compatibility.
+**Status**: ✅ Implemented and Tested
 
-## ✅ Implementation Complete
+## View Formats
 
-### 1. Core Functions (`bl_mcp/tools.py`)
-
-#### `_parse_views(views, tickers) -> (P, Q)`
-Converts view formats to P, Q matrices:
+### 1. Dict-based P Matrix (Recommended)
 
 ```python
-# Format 1: Dict-based P (relative views!)
+# Relative View: NVDA will outperform AAPL by 20%
 views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
 → P = [[1, -1, 0]], Q = [0.20]
 
-# Format 2: NumPy P (advanced)
-views = {"P": [[1, -1, 0]], "Q": [0.20]}
-→ P = [[1, -1, 0]], Q = [0.20]
-
-# Absolute view with P, Q format
+# Absolute View: AAPL expected to return 10%
 views = {"P": [{"AAPL": 1}], "Q": [0.10]}
 → P = [[1, 0, 0]], Q = [0.10]
 ```
 
 **Features**:
+- ✅ Order-independent ticker names (LLM-friendly)
 - ✅ Validates unknown tickers
 - ✅ Validates P, Q dimensions match
-- ✅ Handles missing P or Q with clear error messages
-- ✅ Order-independent dict-based P (LLM-friendly)
 
-#### `_normalize_confidence(confidence, views, tickers) -> list`
+### 2. NumPy P Matrix (Advanced)
+
+```python
+# Index-based: NVDA=0, AAPL=1, MSFT=2
+views = {"P": [[1, -1, 0]], "Q": [0.20]}
+→ P = [[1, -1, 0]], Q = [0.20]
+```
+
+## Core Functions
+
+### `_parse_views(views, tickers) -> (P, Q)`
+
+Converts view formats to P, Q matrices.
+
+### `_normalize_confidence(confidence, views, tickers) -> list`
+
 Unifies all confidence formats to list:
 
 ```python
 None → [0.5, 0.5, ...]           # Default
-0.7 → [0.7, 0.7, ...]             # Float (same for all views)
-[0.9, 0.8] → [0.9, 0.8]           # List (per-view confidence)
+0.7 → [0.7, 0.7, ...]            # Float (same for all views)
+[0.9, 0.8] → [0.9, 0.8]          # List (per-view confidence)
 ```
 
-**Features**:
-- ✅ Validates confidence length matches number of views
-- ✅ Percentage normalization (70 → 0.7)
-- ✅ Per-view confidence validation
-
-### 2. Updated `optimize_portfolio_bl()`
-
-**Changes**:
-- ✅ Uses `_parse_views()` instead of `validate_view_dict()`
-- ✅ Uses `_normalize_confidence()` for all confidence types
-- ✅ Always uses P, Q with `BlackLittermanModel` (no more `absolute_views`)
-- ✅ Maintains parameter swap detection
-- ✅ Backward compatible with existing code
-
-**Updated Docstring**:
-```python
-views: Your investment views (optional). Uses P, Q format:
-
-      1. Dict-based P matrix (LLM-friendly):
-         {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
-         - NVDA will outperform AAPL by 20%
-         - Ticker names (order-independent, LLM-friendly)
-
-      2. NumPy P matrix (advanced):
-         {"P": [[1, -1, 0]], "Q": [0.20]}
-         - Index-based (NVDA=0, AAPL=1, MSFT=2)
-
-      3. Absolute view with P, Q:
-         {"P": [{"AAPL": 1}], "Q": [0.10]}
-         - AAPL expected to return 10%
-
-confidence: How confident you are in your views (0.0 to 1.0, default: 0.5).
-           Can be:
-           - Single float: Same confidence for all views
-           - List: Per-view confidence
-           - None: Defaults to 0.5 (neutral)
-```
-
-### 3. Comprehensive Tests
-
-**File**: `tests/test_relative_views_simple.py`
-
-**Test Coverage**:
-- ✅ **Dict-based P Matrix**
-  - Single relative view
-  - Multiple relative views
-  - Complex weights
-  - Absolute view with P, Q format
-  - Float confidence auto-conversion
-  - Default confidence (None)
-
-- ✅ **NumPy P Matrix**
-  - Single view
-  - Multiple views
-  - Absolute view (pick single asset)
-
-- ✅ **Confidence Normalization**
-  - None → list
-  - Float → list
-  - List passthrough
-  - Percentage input (70 → 0.7)
-
-- ✅ **Validation Errors**
-  - Unknown ticker in dict-based P
-  - Confidence length mismatch
-  - Missing Q with P
-  - P/Q dimension mismatch
-  - NumPy P column count mismatch
-
-- ✅ **Equivalence Testing**
-  - Dict-based P == NumPy P
-
-**Test Results**:
-```bash
-$ make test-relative
-============================================================
-🧪 RELATIVE VIEW SUPPORT TESTS
-============================================================
-
-✅ Testing dict-based P matrix (relative views)...
-  ✓ Single relative view works
-  ✓ Multiple relative views work
-  ✓ Float confidence auto-converts to list
-  ✓ Absolute view with P, Q format works
-
-✅ Testing NumPy P matrix...
-  ✓ NumPy P matrix works
-
-✅ Testing validation errors...
-  ✓ Unknown ticker detected
-  ✓ Confidence length mismatch detected
-  ✓ Missing Q detected
-
-✅ Testing equivalence...
-  ✓ Dict-based P == NumPy P
-
-============================================================
-✅ ALL TESTS PASSED!
-============================================================
-```
-
-### 4. Makefile Integration
-
-Added `test-relative` target:
-```bash
-make test-relative  # Run relative view tests
-make help          # Shows test-relative in help menu
-```
-
-## 📊 Impact
-
-### For Users
-- Can now express relative views naturally
-- Dict-based P is human-readable
-- All existing code continues to work
-
-### For LLMs
-- Easy to generate dict-based P from natural language
-- "NVDA will outperform AAPL by 20%" → `{"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}`
-- Order-independent ticker names
-
-### For Code
-- Single unified interface (less complexity)
-- Comprehensive validation
-- Clear error messages
-
-## 🔍 Key Design Decisions
-
-1. **P, Q Everywhere**: Internally always use P, Q matrices (even for absolute views)
-   - Simplifies BlackLittermanModel usage
-   - Unifies code paths
-   - Enables relative views naturally
-
-2. **Confidence as List**: Normalize all confidence types to list internally
-   - Consistent interface with PyPortfolioOpt
-   - Easier validation
-   - Clear per-view confidence
-
-3. **P, Q Format Only**: All views use P, Q format
-   - Absolute views: `{"P": [{"AAPL": 1}], "Q": [0.10]}`
-   - Relative views: `{"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}`
-   - Single float confidence still works
-
-4. **Validation First**: Catch errors early with clear messages
-   - Unknown tickers
-   - Dimension mismatches
-   - Missing P or Q
-   - Confidence length errors
-
-## 📝 Usage Examples
+## Usage Examples
 
 ### Relative View: NVDA vs AAPL
+
 ```python
 result = optimize_portfolio_bl(
     tickers=["NVDA", "AAPL", "MSFT"],
@@ -204,11 +61,12 @@ result = optimize_portfolio_bl(
         "P": [{"NVDA": 1, "AAPL": -1}],
         "Q": [0.20]  # NVDA outperforms by 20%
     },
-    confidence=[0.9]  # Very confident
+    confidence=0.9
 )
 ```
 
 ### Multiple Relative Views
+
 ```python
 result = optimize_portfolio_bl(
     tickers=["NVDA", "AAPL", "MSFT"],
@@ -226,37 +84,51 @@ result = optimize_portfolio_bl(
 ```
 
 ### Mixed: Absolute + Relative
+
 ```python
-# Use absolute for one asset, relative for comparison
-views={
+views = {
     "P": [
         {"NVDA": 1},                     # Absolute: NVDA 30%
-        {"AAPL": 1, "MSFT": -1}         # Relative: AAPL vs MSFT
+        {"AAPL": 1, "MSFT": -1}          # Relative: AAPL vs MSFT
     ],
     "Q": [0.30, 0.05]
 }
 ```
 
-## 🎯 Acceptance Criteria (Completed)
+## Validation Errors
 
-- [x] Support dict-based P matrix format
-- [x] Support NumPy P matrix format
-- [x] Normalize confidence to list internally
-- [x] Support float, list, and None confidence inputs
-- [x] Validate P matrix tickers exist in tickers list
-- [x] Validate confidence length matches Q length
-- [x] Validate Q is provided when P is provided
-- [x] Add comprehensive tests
-- [x] Update documentation with examples
+The implementation catches these errors:
+- Unknown ticker in dict-based P
+- Confidence length mismatch
+- Missing Q with P
+- P/Q dimension mismatch
+- NumPy P column count mismatch
 
-## 🚀 Next Steps
+## Design Decisions
 
-- [ ] 백테스팅 기능 추가
-- [ ] 팩터 스코어링 Tool 추가
-- [ ] HRP 가중치 Tool 추가
+1. **P, Q Everywhere**: Internally always use P, Q matrices
+   - Simplifies BlackLittermanModel usage
+   - Unifies code paths
 
-## 📚 References
+2. **Confidence as List**: Normalize all confidence types to list internally
+   - Consistent interface with PyPortfolioOpt
+   - Clear per-view confidence
 
-- Implementation: `bl_mcp/tools.py` (_parse_views, _normalize_confidence, optimize_portfolio_bl)
-- Tests: `tests/test_relative_views_simple.py`
-- PyPortfolioOpt Docs: https://pyportfolioopt.readthedocs.io/en/latest/BlackLitterman.html
+3. **Validation First**: Catch errors early with clear messages
+
+## Impact
+
+### For Users
+- Express relative views naturally
+- Dict-based P is human-readable
+- All existing code continues to work
+
+### For LLMs
+- Easy to generate dict-based P from natural language
+- "NVDA will outperform AAPL by 20%" → `{"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}`
+- Order-independent ticker names
+
+---
+
+**Version**: 3.0 (Updated for v0.3.x)
+**Last Updated**: 2025-11-25

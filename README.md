@@ -10,11 +10,12 @@ Works with Claude Desktop, Windsurf IDE, Google ADK, and any MCP-compatible AI
 
 ## Features
 
-- **Portfolio Optimization** - Calculate optimal weights using Black-Litterman model
-- **Investor Views** - Express views like "AAPL will return 10%" or "NVDA will outperform MSFT"
-- **Backtesting** - Validate strategies with historical data
-- **VaR Warnings** - Auto-warn on overly optimistic predictions using EGARCH model
-- **Multiple Assets** - S&P 500, NASDAQ 100, ETF, Crypto, and custom data support
+- **Portfolio Optimization** - Black-Litterman model with sensitivity analysis
+- **Investor Views** - Absolute/relative views with confidence levels
+- **Backtesting** - Strategy comparison, drawdown analysis, timeseries
+- **Asset Analysis** - Correlation matrix, VaR, per-asset statistics
+- **Dashboard Generation** - Visualization hints for AI-generated charts
+- **Multiple Assets** - S&P 500, NASDAQ 100, ETF, Crypto, custom data
 
 ---
 
@@ -92,11 +93,11 @@ Generated using the example prompts above with Claude Desktop:
 
 | Optimization | Backtest | Strategy |
 |:---:|:---:|:---:|
-| [![Optimization](docs/screenshots/demo_optimization.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool3.html) |
+| [![Optimization](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/examples/screenshots/demo_optimization.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/demo_optimization.html) | [![Backtest](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/examples/screenshots/demo_backtest.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/demo_backtest.html) | [![Strategy](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/examples/screenshots/demo_strategy.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/demo_strategy.html) |
 
 | Correlation | Sensitivity |
 |:---:|:---:|
-| [![Correlation](docs/screenshots/demo_correlation.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool5.html) |
+| [![Correlation](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/examples/screenshots/demo_correlation.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/demo_correlation.html) | [![Sensitivity](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/examples/screenshots/demo_sensitivity.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/demo_sensitivity.html) |
 
 ---
 

@@ -524,7 +524,6 @@ optimize_portfolio_bl(["005930.KS", "AAPL"])
 |------|--------|-------------|
 | `optimize_portfolio_bl` | Existing | BL optimization |
 | `backtest_portfolio` | Complete | Portfolio backtesting |
-| `calculate_hrp_weights` | NEW Optional | HRP optimization (BL alternative) |
 
 **Excluded features** (moved to bl-orchestrator):
 - ~~`generate_views_from_technicals`~~

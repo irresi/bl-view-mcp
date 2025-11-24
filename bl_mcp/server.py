@@ -198,7 +198,7 @@ def optimize_portfolio_bl(
     - Pie: weights (verify sum≈1.0)
     - Bar: prior vs posterior returns
     - Table: metrics + raw data
-    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
+    NEVER fabricate data. Include disclaimer: "Please verify raw data before making investment decisions."
     """
     # Handle views parameter - can be ViewMatrix, dict, or JSON string
     if views is not None:
@@ -404,7 +404,7 @@ def backtest_portfolio(
     - Line: timeseries (value + benchmark)
     - Area: drawdown (red, MUST show negative values clearly)
     - Table: metrics + raw data
-    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
+    NEVER fabricate data. Include disclaimer: "Please verify raw data before making investment decisions."
     """
     # Handle custom_config - can be BacktestConfig or dict
     config_dict = None
@@ -518,7 +518,7 @@ def get_asset_stats(
     - Heatmap: correlation_matrix (FIXED scale -1 to +1, never auto-scale)
     - Scatter: risk vs return
     - Table: metrics + raw data
-    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
+    NEVER fabricate data. Include disclaimer: "Please verify raw data before making investment decisions."
     """
     return tools.get_asset_stats(
         tickers=tickers,

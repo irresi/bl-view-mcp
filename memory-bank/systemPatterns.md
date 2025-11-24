@@ -1,6 +1,6 @@
 # System Patterns
 
-## 현재 아키텍처 (2025-11-23)
+## Current Architecture (2025-11-23)
 
 ```
 ┌─────────────────┐
@@ -8,7 +8,7 @@
 └────────┬────────┘
          │ MCP Protocol
 ┌────────▼────────┐
-│  server.py      │  @mcp.tool (1개만)
+│  server.py      │  @mcp.tool (only 1)
 │  optimize_      │
 │  portfolio_bl   │
 └────────┬────────┘
@@ -24,57 +24,57 @@
 └────────┬────────┘
          │
 ┌────────▼────────┐
-│ data/*.parquet  │  503개 종목
+│ data/*.parquet  │  503 tickers
 └─────────────────┘
 ```
 
 ---
 
-## 핵심 설계 결정
+## Key Design Decisions
 
-### 1. Single Tool 설계
+### 1. Single Tool Design
 
-**이유**: LLM이 불필요하게 중간 단계 호출 방지
+**Reason**: Prevent LLM from unnecessarily calling intermediate steps
 
 ```python
-# 이전: 4개 Tool 체이닝 필요
+# Before: Required 4 Tool chaining
 returns = calculate_expected_returns(...)
 cov = calculate_covariance_matrix(...)
 view = create_investor_view(...)
 portfolio = optimize_portfolio_bl(returns, cov, view)
 
-# 현재: 1개 Tool로 완료
+# Now: Complete with 1 Tool
 portfolio = optimize_portfolio_bl(tickers, views, confidence)
 ```
 
-### 2. P, Q 형식만 지원
+### 2. P, Q Format Only
 
-**이유**: LLM 혼동 방지, API 일관성
+**Reason**: Prevent LLM confusion, API consistency
 
 ```python
-# ❌ 제거됨
+# ❌ Removed
 views = {"AAPL": 0.10}
 
-# ✅ 유일한 형식
+# ✅ Only format
 views = {"P": [{"AAPL": 1}], "Q": [0.10]}           # Absolute
 views = {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}  # Relative
 views = {"P": [[1, -1, 0]], "Q": [0.20]}            # NumPy
 ```
 
-### 3. Ticker 순서 유지
+### 3. Preserve Ticker Order
 
-**이유**: NumPy P format 인덱스 정합성
+**Reason**: NumPy P format index consistency
 
 ```python
-# 사용자 입력 순서 그대로 유지
-tickers = ["NVDA", "AAPL", "MSFT"]  # 정렬 안 함
+# Preserve user input order as-is
+tickers = ["NVDA", "AAPL", "MSFT"]  # No sorting
 ```
 
 ---
 
-## 주요 패턴
+## Key Patterns
 
-### Views 파싱
+### Views Parsing
 
 ```python
 def _parse_views(views: dict, tickers: list[str]):
@@ -95,27 +95,27 @@ def _parse_views(views: dict, tickers: list[str]):
     return P, Q
 ```
 
-### Confidence 정규화
+### Confidence Normalization
 
 ```python
 def _normalize_confidence(confidence, views, tickers):
     num_views = len(views["Q"])
 
     if confidence is None:
-        return [0.5] * num_views      # 기본값
+        return [0.5] * num_views      # Default
     elif isinstance(confidence, (int, float)):
-        return [confidence] * num_views  # 모든 뷰에 동일
+        return [confidence] * num_views  # Same for all views
     elif isinstance(confidence, list):
-        return confidence              # 뷰별 다르게
+        return confidence              # Different per view
 ```
 
-### Risk Aversion 계산
+### Risk Aversion Calculation
 
 ```python
-# SPY로 market-implied δ 계산
+# Calculate market-implied delta using SPY
 base_delta = market_implied_risk_aversion(spy_prices)
 
-# investment_style 배수 적용
+# Apply investment_style multiplier
 multipliers = {
     "aggressive": 0.5,
     "balanced": 1.0,
@@ -126,10 +126,10 @@ risk_aversion = base_delta * multipliers[style]
 
 ---
 
-## 에러 처리
+## Error Handling
 
 ```python
-# 이전 형식 사용 시 명확한 에러
+# Clear error for old format usage
 if "P" not in views or "Q" not in views:
     raise ValueError(
         "Views must use P, Q format. "
@@ -139,10 +139,10 @@ if "P" not in views or "Q" not in views:
 
 ---
 
-## 테스트 패턴
+## Test Patterns
 
 ```python
-# 6개 핵심 시나리오
+# 6 core scenarios
 def test_optimize_basic()              # No views
 def test_optimize_with_absolute_view() # P, Q absolute
 def test_optimize_with_relative_view() # P, Q relative
@@ -155,51 +155,51 @@ def test_multiple_views()              # Per-view confidence
 
 ---
 
-## 프로젝트 분리 아키텍처 (2025-11-23)
+## Project Separation Architecture (2025-11-23)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  bl-orchestrator (별도 프로젝트)                         │
+│  bl-orchestrator (separate project)                     │
 │  ├── CrewAI Multi-agent                                 │
-│  │   ├── Bull Agent (낙관론)                            │
-│  │   ├── Bear Agent (비관론)                            │
-│  │   └── Moderator Agent (합의 도출)                    │
-│  └── 출력: {"P": [...], "Q": [...], "confidence": [...]}│
+│  │   ├── Bull Agent (optimistic view)                   │
+│  │   ├── Bear Agent (pessimistic view)                  │
+│  │   └── Moderator Agent (consensus building)           │
+│  └── Output: {"P": [...], "Q": [...], "confidence": [...]}│
 └──────────────────────┬──────────────────────────────────┘
                        │ MCP Protocol
 ┌──────────────────────▼──────────────────────────────────┐
-│  bl-mcp (이 프로젝트)                                    │
-│  ├── optimize_portfolio_bl (기존)                       │
+│  bl-mcp (this project)                                  │
+│  ├── optimize_portfolio_bl (existing)                   │
 │  ├── backtest_portfolio (Phase 2)                       │
-│  └── calculate_hrp_weights (Phase 2, 선택)              │
+│  └── calculate_hrp_weights (Phase 2, optional)          │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### View Generation 전략 변경
+### View Generation Strategy Change
 
-**이전 계획 (폐기)**:
+**Previous Plan (abandoned)**:
 ```python
-# 규칙 기반 - 자의적
+# Rule-based - arbitrary
 if rsi < 30:
-    Q = 0.05  # 왜 5%?
-    confidence = 0.6  # 왜 60%?
+    Q = 0.05  # Why 5%?
+    confidence = 0.6  # Why 60%?
 ```
 
-**새 접근 (채택)**:
+**New Approach (adopted)**:
 ```
 Multi-agent debate:
-  Bull: "AAPL P/E 낮고 모멘텀 강함, 15% 아웃퍼폼"
-  Bear: "성장 둔화, 5%가 현실적"
-  Moderator: "합의: 8%, confidence 65%"
+  Bull: "AAPL has low P/E and strong momentum, 15% outperformance"
+  Bear: "Growth slowing, 5% is realistic"
+  Moderator: "Consensus: 8%, confidence 65%"
 ```
 
-**이유**:
-1. 절대 뷰는 예측 불가능 (누가 AAPL이 정확히 10% 오를지 알겠는가?)
-2. 상대 뷰는 논쟁으로 정당화 가능 ("A가 B보다 나을 것")
-3. LLM이 데이터 보고 직접 reasoning하는 게 규칙보다 유연
+**Reasons**:
+1. Absolute views are unpredictable (who knows if AAPL will rise exactly 10%?)
+2. Relative views can be justified through debate ("A will outperform B")
+3. LLM reasoning directly from data is more flexible than rules
 
 ---
 
-## 참고
+## Reference
 
-상세 컨텍스트: `CLAUDE.md` (Claude Code 자동 로드)
+Detailed context: `CLAUDE.md` (auto-loaded by Claude Code)

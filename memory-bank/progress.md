@@ -1,47 +1,47 @@
 # Progress
 
-## 전체 진행 상황 (2025-11-24)
+## Overall Progress (2025-11-24)
 
 ```
-Phase 0: ████████████████████████ 100% ✓ (준비)
-Phase 1: ████████████████████████ 100% ✓ (MVP + 간소화)
-Phase 2: ████████████████░░░░░░░░  66% (백테스트 완료, HRP 미정)
-Phase 3: ████████████████████████ 100% ✓ (PyPI v0.2.3 + Phase 3 개선 PR #22)
+Phase 0: ████████████████████████ 100% ✓ (Preparation)
+Phase 1: ████████████████████████ 100% ✓ (MVP + Simplification)
+Phase 2: ████████████████░░░░░░░░  66% (Backtest complete, HRP TBD)
+Phase 3: ████████████████████████ 100% ✓ (PyPI v0.2.3 + Phase 3 improvements PR #22)
 ```
 
 ---
 
-## Phase 1: 완료 ✅
+## Phase 1: Complete ✅
 
-### 핵심 구현
+### Core Implementation
 
-| 항목 | 상태 |
-|------|------|
-| `optimize_portfolio_bl` | ✅ 유일한 MCP Tool |
-| P, Q 형식 Views | ✅ Absolute + Relative |
+| Item | Status |
+|------|--------|
+| `optimize_portfolio_bl` | ✅ Only MCP Tool |
+| P, Q format Views | ✅ Absolute + Relative |
 | Idzorek confidence | ✅ float/list |
 | Investment Style | ✅ aggressive/balanced/conservative |
-| 데이터 자동 다운로드 | ✅ GitHub Release |
-| 시가총액 자동 로드 | ✅ yfinance + Parquet 캐시 |
+| Auto data download | ✅ GitHub Release |
+| Auto market cap load | ✅ yfinance + Parquet cache |
 
-### 인프라
+### Infrastructure
 
-- ✅ FastMCP stdio/HTTP 듀얼 모드
-- ✅ 503개 S&P 500 데이터 (Parquet)
-- ✅ Docker 지원
-- ✅ Makefile 자동화
-- ✅ 테스트 시스템
+- ✅ FastMCP stdio/HTTP dual mode
+- ✅ 503 S&P 500 data (Parquet)
+- ✅ Docker support
+- ✅ Makefile automation
+- ✅ Test system
 
 ---
 
-## Phase 2: 백테스트 완료 (2025-11-23)
+## Phase 2: Backtest Complete (2025-11-23)
 
-### 포함
+### Included
 
-- [x] `backtest_portfolio` - 백테스팅 ✅
-- [ ] `calculate_hrp_weights` - HRP 최적화 (선택)
+- [x] `backtest_portfolio` - Backtesting ✅
+- [ ] `calculate_hrp_weights` - HRP optimization (optional)
 
-### 제외 (bl-orchestrator로 이동)
+### Excluded (moved to bl-orchestrator)
 
 - ~~`generate_views_from_technicals`~~
 - ~~`generate_views_from_fundamentals`~~
@@ -49,115 +49,115 @@ Phase 3: ███████████████████████�
 - ~~`get_market_data`~~
 - ~~`calculate_factor_scores`~~
 
-### 프로젝트 분리 결정
+### Project Separation Decision
 
-| 프로젝트 | 역할 |
-|----------|------|
-| **bl-mcp** | MCP Tool 라이브러리 (순수) |
+| Project | Role |
+|---------|------|
+| **bl-mcp** | MCP Tool library (pure) |
 | **bl-orchestrator** | Multi-agent view generation (CrewAI) |
 
 ---
 
-## Phase 3: PyPI 배포 완료 ✅
+## Phase 3: PyPI Release Complete ✅
 
-### 배포 현황
+### Release Status
 
-| 항목 | 상태 |
-|------|------|
-| PyPI 패키지 | ✅ `black-litterman-mcp` |
-| 최신 버전 | v0.2.3 |
+| Item | Status |
+|------|--------|
+| PyPI package | ✅ `black-litterman-mcp` |
+| Latest version | v0.2.3 |
 | Trusted Publishing | ✅ GitHub Actions |
 | Dynamic Versioning | ✅ hatch-vcs (git tags) |
 
-### Claude Desktop 호환성 (v0.2.3)
+### Claude Desktop Compatibility (v0.2.3)
 
-| 이슈 | 원인 | 해결 |
-|------|------|------|
-| Read-only filesystem | MCP가 루트에서 실행 | 홈 디렉토리 사용 |
-| JSON string parameter | Claude가 dict를 str로 전송 | Union[dict, str] 추가 |
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Read-only filesystem | MCP runs at root | Use home directory |
+| JSON string parameter | Claude sends dict as str | Added Union[dict, str] |
 
 ---
 
-## 변경 이력
+## Change History
 
-### 2025-11-24 - Phase 3 개선 (PR #22)
-- **`get_asset_stats` 신규 도구**
-  - 자산별 통계 (가격, 수익률, 변동성, 샤프, 시가총액)
-  - VaR 95% 및 95th percentile (EGARCH 기반)
-  - 상관행렬, 공분산행렬 제공
-- **`backtest_portfolio` 확장**
-  - `timeseries`: 월별 샘플링된 포트폴리오 가치
-  - `drawdown_details`: 최대 낙폭 시작/종료/회복 날짜
-  - `compare_strategies`: 모든 전략 한 번에 비교
-  - `include_equal_weight`: 동일비중 포트폴리오 비교
-  - `timeseries_freq`: daily/weekly/monthly 선택 가능
-- **`optimize_portfolio_bl` 확장**
-  - `sensitivity_range`: 신뢰도별 민감도 분석
-- **`_visualization_hint` 추가**
-  - 모든 도구 응답에 시각화 가이드 포함
+### 2025-11-24 - Phase 3 Improvements (PR #22)
+- **`get_asset_stats` new tool**
+  - Per-asset statistics (price, return, volatility, Sharpe, market cap)
+  - VaR 95% and 95th percentile (EGARCH-based)
+  - Correlation matrix, covariance matrix
+- **`backtest_portfolio` extensions**
+  - `timeseries`: Monthly sampled portfolio values
+  - `drawdown_details`: Max drawdown start/end/recovery dates
+  - `compare_strategies`: Compare all strategies at once
+  - `include_equal_weight`: Compare equal-weight portfolio
+  - `timeseries_freq`: Selectable daily/weekly/monthly
+- **`optimize_portfolio_bl` extensions**
+  - `sensitivity_range`: Sensitivity analysis by confidence level
+- **`_visualization_hint` added**
+  - Visualization guide in all tool responses
   - safety_rules, recommended_charts, scale_guidance
-- **README 업데이트**
-  - Dashboard 생성 팁 추가
-  - Example Use Cases 섹션 (5개 프롬프트 예시)
-- **테스트 추가**
-  - test_simple.py에 백테스트 테스트 5개 추가
+- **README update**
+  - Dashboard generation tips added
+  - Example Use Cases section (5 prompt examples)
+- **Tests added**
+  - 5 backtest tests added to test_simple.py
 - **PR #22**: Closes #17, #18, #19, #20
 
-### 2025-11-23 (심야) - PyPI v0.2.3 배포
-- **v0.2.3**: views 파라미터 str 타입 추가
-  - Claude Desktop이 JSON object를 문자열로 전송하는 이슈 해결
-  - FastMCP + Claude Code 알려진 버그 (anthropics/claude-code#3084)
-  - `Union[ViewMatrix, dict, str]` workaround 적용
-- **v0.2.2**: 데이터 디렉토리 홈으로 이동
-  - `~/.black-litterman/data` 기본 경로
-  - `BL_DATA_DIR` 환경변수 오버라이드 지원
-  - Claude Desktop read-only 이슈 해결
-- **v0.2.1**: backtest_portfolio 추가
+### 2025-11-23 (late night) - PyPI v0.2.3 Release
+- **v0.2.3**: Added str type for views parameter
+  - Resolved Claude Desktop sending JSON object as string
+  - FastMCP + Claude Code known bug (anthropics/claude-code#3084)
+  - Applied `Union[ViewMatrix, dict, str]` workaround
+- **v0.2.2**: Moved data directory to home
+  - `~/.black-litterman/data` default path
+  - `BL_DATA_DIR` environment variable override support
+  - Resolved Claude Desktop read-only issue
+- **v0.2.1**: Added backtest_portfolio
 
-### 2025-11-23 (밤) - backtest_portfolio 구현 완료
-- **backtest_portfolio MCP Tool 추가**
-  - Strategy preset 패턴: buy_and_hold, passive_rebalance, risk_managed
-  - Custom config 지원: rebalance_frequency, fees, stop_loss, max_drawdown_limit
+### 2025-11-23 (night) - backtest_portfolio Implementation Complete
+- **backtest_portfolio MCP Tool added**
+  - Strategy preset pattern: buy_and_hold, passive_rebalance, risk_managed
+  - Custom config support: rebalance_frequency, fees, stop_loss, max_drawdown_limit
   - Performance metrics: CAGR, Sharpe, Sortino, Max Drawdown, Calmar
   - Benchmark comparison: Alpha, Beta, Information Ratio
-  - Holding periods tracking (세금 계산용)
-- **테스트 추가**: tests/test_backtest.py (13개 테스트 모두 통과)
-- **문서 업데이트**: CLAUDE.md, README.md, memory-bank/*
+  - Holding periods tracking (for tax calculation)
+- **Tests added**: tests/test_backtest.py (all 13 tests passed)
+- **Documentation updated**: CLAUDE.md, README.md, memory-bank/*
 
-### 2025-11-23 (저녁) - 프로젝트 분리 결정
-- **Phase 2 범위 축소**: backtest + HRP만 포함
-- **View generation 제외**: Multi-agent debate로 대체 (별도 프로젝트)
-- **이유**: 규칙 기반 View 생성은 자의적, LLM reasoning이 더 적합
-- **GitHub Issue #11 업데이트**: 결정 사항 문서화
+### 2025-11-23 (evening) - Project Separation Decision
+- **Phase 2 scope reduced**: Only backtest + HRP included
+- **View generation excluded**: Replaced with multi-agent debate (separate project)
+- **Reason**: Rule-based view generation is arbitrary, LLM reasoning is more suitable
+- **GitHub Issue #11 updated**: Decision documented
 
-### 2025-11-23 (오후)
-- **시가총액 자동 로드 구현**
-  - `market_caps` 파라미터 제거
-  - `get_market_caps()` 함수 추가 (data_loader.py)
-  - Parquet 캐시 → yfinance → equal weight fallback
-  - 한 번 가져온 시가총액은 자동 캐싱
+### 2025-11-23 (afternoon)
+- **Automatic market cap loading implemented**
+  - `market_caps` parameter removed
+  - `get_market_caps()` function added (data_loader.py)
+  - Parquet cache -> yfinance -> equal weight fallback
+  - Auto-caching of fetched market caps
 
-### 2025-11-23 (오전)
-- MCP Tool 간소화: 4개 → 1개 (`optimize_portfolio_bl`)
-- Views 형식 통일: P, Q 형식만 지원
-- Confidence 단순화: float/list만 지원
-- Ticker 정렬 제거 (사용자 순서 유지)
-- `CLAUDE.md` 생성 (자동 컨텍스트)
-- memory-bank 정리
+### 2025-11-23 (morning)
+- MCP Tool simplification: 4 -> 1 (`optimize_portfolio_bl`)
+- Views format unified: P, Q format only
+- Confidence simplified: float/list only
+- Ticker sorting removed (preserve user order)
+- `CLAUDE.md` created (auto context)
+- memory-bank cleanup
 
 ### 2025-11-22
-- P, Q 전용 API (Breaking Change)
-- Relative View 지원
-- Period 파라미터 추가
-- Idzorek 구현 검증
+- P, Q only API (Breaking Change)
+- Relative View support
+- Period parameter added
+- Idzorek implementation verification
 
 ### 2025-11-21
-- Phase 1 MVP 완료
-- S&P 500 데이터 다운로드 (503개)
-- GitHub Release 배포
-- Docker 환경 구축
+- Phase 1 MVP complete
+- S&P 500 data download (503)
+- GitHub Release deployment
+- Docker environment setup
 
 ### 2025-11-20
-- 프로젝트 시작
-- Memory Bank 초기화
-- FastMCP + PyPortfolioOpt 선택
+- Project started
+- Memory Bank initialized
+- FastMCP + PyPortfolioOpt selected

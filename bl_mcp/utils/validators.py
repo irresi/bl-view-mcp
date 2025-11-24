@@ -218,16 +218,16 @@ def validate_confidence(confidence: float) -> float:
     Natural Language Guide (for LLM conversion):
     =============================================
     LLMs should convert natural language expressions to numeric confidence:
-    
+
     Confidence Scale (0.5 = neutral pivot point):
-    - "매우 확신" / "very confident" / "certain" / "틀림없어" → 95 (95% or 1.0 for absolute certainty)
-    - "확신" / "confident" / "sure" / "확신해" → 85 (85%)
-    - "꽤 확신" / "quite confident" / "fairly sure" → 75 (75%)
-    - "약간 확신" / "somewhat confident" / "slightly sure" → 60 (60%)
-    - "보통" / "neutral" / "잘 모름" / "반반" → 50 (50% - neutral, no strong view)
-    - "약간 불확실" / "somewhat uncertain" / "not very sure" → 40 (40%)
-    - "불확실" / "uncertain" / "not sure" → 30 (30%)
-    - "매우 불확실" / "very uncertain" / "no confidence" → 10 (10%)
+    - "very confident" / "certain" / "absolutely sure" -> 95 (95% or 1.0 for absolute certainty)
+    - "confident" / "sure" / "pretty sure" -> 85 (85%)
+    - "quite confident" / "fairly sure" -> 75 (75%)
+    - "somewhat confident" / "slightly sure" -> 60 (60%)
+    - "neutral" / "not sure" / "50-50" -> 50 (50% - neutral, no strong view)
+    - "somewhat uncertain" / "not very sure" -> 40 (40%)
+    - "uncertain" / "doubtful" -> 30 (30%)
+    - "very uncertain" / "no confidence" -> 10 (10%)
     
     Default: 50 (50%) when views provided but confidence not specified
     

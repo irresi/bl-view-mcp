@@ -140,129 +140,129 @@ def _validate_views_optimism(
     threshold: float = 0.40
 ) -> list[str]:
     """
-    지나치게 낙관적인 View를 검증하고 경고 메시지를 반환합니다.
+    Validate overly optimistic views and return warning messages.
 
-    연환산 수익률이 threshold(기본 40%)를 초과하는 경우,
-    변동성 모델 기반 VaR 분석을 수행하여
-    현실적인 수익률 범위를 제시하고 경고 메시지를 반환합니다.
+    When annualized returns exceed the threshold (default 40%),
+    performs volatility model-based VaR analysis to suggest
+    realistic return ranges and returns warning messages.
 
     Args:
-        views: P, Q 형식의 View 딕셔너리
-        tickers: 티커 리스트
-        period: VaR 계산에 사용할 데이터 기간 (기본값: "3Y")
-        threshold: 낙관적 View 판단 임계값 (기본값: 0.40 = 40%)
+        views: View dictionary in P, Q format
+        tickers: List of tickers
+        period: Data period for VaR calculation (default: "3Y")
+        threshold: Threshold for optimistic view judgment (default: 0.40 = 40%)
 
     Returns:
-        경고 메시지 리스트 (경고가 없으면 빈 리스트)
+        List of warning messages (empty list if no warnings)
 
     Note:
-        경고 메시지를 반환하지만 최적화 프로세스는 중단하지 않습니다.
+        Returns warning messages but does not halt the optimization process.
     """
     import logging
 
-    warnings_list = []  # 경고 메시지를 저장할 리스트
+    warnings_list = []  # List to store warning messages
 
     if not views or "P" not in views or "Q" not in views:
-        return warnings_list  # View가 없으면 빈 리스트 반환
+        return warnings_list  # Return empty list if no views
 
     P_input = views["P"]
     Q = np.array(views["Q"])
 
-    logging.warning(f"🔍 VaR 검증 시작: Q = {Q}, threshold = {threshold}")
+    logging.warning(f"VaR validation starting: Q = {Q}, threshold = {threshold}")
 
-    # 각 View에 대해 검증
+    # Validate each View
     for i, q_value in enumerate(Q):
-        logging.warning(f"  📊 View {i+1}: Q = {q_value:.2%}, abs(Q) = {abs(q_value):.2%}")
+        logging.warning(f"  View {i+1}: Q = {q_value:.2%}, abs(Q) = {abs(q_value):.2%}")
 
-        # Q 값이 threshold를 초과하는지 확인
+        # Check if Q value exceeds threshold
         if abs(q_value) <= threshold:
-            logging.warning(f"  ✅ View {i+1} 통과: {abs(q_value):.2%} <= {threshold:.2%}")
+            logging.warning(f"  View {i+1} passed: {abs(q_value):.2%} <= {threshold:.2%}")
             continue
 
-        logging.warning(f"  ⚠️ View {i+1} 임계값 초과: {abs(q_value):.2%} > {threshold:.2%}, VaR 분석 시작")
+        logging.warning(f"  View {i+1} exceeds threshold: {abs(q_value):.2%} > {threshold:.2%}, starting VaR analysis")
 
-        # P 매트릭스에서 해당 View의 티커 추출
+        # Extract tickers for this View from P matrix
         if isinstance(P_input[0], dict):
-            # Dict 형식: [{"NVDA": 1, "AAPL": -1}]
+            # Dict format: [{"NVDA": 1, "AAPL": -1}]
             view_dict = P_input[i]
-            # 절대 View인지 상대 View인지 판단
-            # 절대 View: 하나의 티커만 있고 weight가 1
-            # 상대 View: 여러 티커가 있거나 weight 합이 0
+            # Determine if absolute or relative view
+            # Absolute View: single ticker with weight 1
+            # Relative View: multiple tickers or weights sum to 0
             is_absolute = len(view_dict) == 1 and list(view_dict.values())[0] == 1
 
             if is_absolute:
-                # 절대 View: 해당 티커에 대해 VaR 분석
+                # Absolute View: perform VaR analysis for the ticker
                 ticker = list(view_dict.keys())[0]
-                logging.warning(f"  📈 절대 View 감지: {ticker} = {q_value:.2%}")
+                logging.warning(f"  Absolute View detected: {ticker} = {q_value:.2%}")
 
                 try:
-                    logging.warning(f"  🔄 VaR 계산 시작: {ticker}, period={period}")
+                    logging.warning(f"  Starting VaR calculation: {ticker}, period={period}")
                     var_result = calculate_var_egarch(ticker, period=period)
-                    logging.warning(f"  ✅ VaR 계산 성공: 95th Percentile = {var_result['percentile_95_annual']:.2%}")
+                    logging.warning(f"  VaR calculation successful: 95th Percentile = {var_result['percentile_95_annual']:.2%}")
 
-                    # 사용자 예측이 95th percentile을 초과하는지 확인
+                    # Check if user prediction exceeds 95th percentile
                     if q_value > var_result["percentile_95_annual"]:
-                        logging.warning(f"  ⚠️ 낙관적 예측 감지: {q_value:.2%} > {var_result['percentile_95_annual']:.2%}")
+                        logging.warning(f"  Optimistic prediction detected: {q_value:.2%} > {var_result['percentile_95_annual']:.2%}")
 
-                        # 경고 메시지 생성 및 저장
+                        # Generate and store warning message
                         warning_msg = (
-                            f"⚠️ VaR 경고 (View {i+1}): 지나치게 낙관적인 수익률 예측이 감지되었습니다.\n\n"
-                            f"입력된 View: {ticker} {q_value:.1%} 수익 예측 (연환산)\n"
-                            f"귀하의 예측({q_value:.1%})은 역사적 95th percentile({var_result['percentile_95_annual']:.1%})을 크게 상회합니다.\n\n"
+                            f"VaR Warning (View {i+1}): Overly optimistic return prediction detected.\n\n"
+                            f"Input View: {ticker} {q_value:.1%} return prediction (annualized)\n"
+                            f"Your prediction ({q_value:.1%}) significantly exceeds the historical 95th percentile ({var_result['percentile_95_annual']:.1%}).\n\n"
                             f"{var_result['warning_message']}\n\n"
-                            f"포트폴리오 최적화를 계속 진행하지만, 보다 현실적인 수익률을 고려하시기 바랍니다."
+                            f"Portfolio optimization will continue, but please consider more realistic returns."
                         )
                         warnings_list.append(warning_msg)
                         logging.warning(warning_msg)
                     else:
-                        logging.warning(f"  ✅ VaR 검증 통과: {q_value:.2%} <= {var_result['percentile_95_annual']:.2%}")
+                        logging.warning(f"  VaR validation passed: {q_value:.2%} <= {var_result['percentile_95_annual']:.2%}")
 
                 except Exception as e:
-                    # VaR 계산 실패 시 로그 출력하고 계속 진행
-                    logging.error(f"  ❌ VaR 계산 실패: {ticker} - {type(e).__name__}: {e}")
-                    logging.error(f"  ⚠️ VaR 검증 스킵됨 (계산 실패)")
+                    # Log error and continue if VaR calculation fails
+                    logging.error(f"  VaR calculation failed: {ticker} - {type(e).__name__}: {e}")
+                    logging.error(f"  VaR validation skipped (calculation failed)")
                     import traceback
                     logging.error(traceback.format_exc())
             else:
-                # 상대 View: 양수 weight를 가진 티커들에 대해 VaR 분석
-                # 예: {"NVDA": 1, "AAPL": -1}, Q: 0.50
-                # → NVDA가 AAPL 대비 50% 아웃퍼폼
-                # 이 경우 NVDA의 절대 수익률이 50%라는 의미는 아니므로
-                # 더 보수적으로 접근: 양수 티커의 VaR만 확인
+                # Relative View: perform VaR analysis for tickers with positive weights
+                # e.g., {"NVDA": 1, "AAPL": -1}, Q: 0.50
+                # -> NVDA outperforms AAPL by 50%
+                # This doesn't mean NVDA's absolute return is 50%
+                # More conservative approach: only check VaR for positive weight tickers
                 positive_tickers = [t for t, w in view_dict.items() if w > 0]
 
                 for ticker in positive_tickers:
                     try:
                         var_result = calculate_var_egarch(ticker, period=period)
 
-                        # 상대 View의 경우, Q 값이 95th percentile의 2배를 초과하면 경고
-                        # (상대적 차이가 너무 크면 비현실적)
+                        # For relative views, warn if Q exceeds 2x the 95th percentile
+                        # (excessive relative difference is unrealistic)
                         if abs(q_value) > var_result["percentile_95_annual"] * 2:
                             warning_msg = (
-                                f"⚠️ VaR 경고 (View {i+1}): 상대 View가 지나치게 극단적일 수 있습니다.\n\n"
-                                f"입력된 View: {ticker} 관련 상대 View {q_value:.1%}\n"
-                                f"이 값은 {ticker}의 역사적 95th percentile({var_result['percentile_95_annual']:.1%})의 2배를 초과합니다.\n\n"
+                                f"VaR Warning (View {i+1}): Relative view may be too extreme.\n\n"
+                                f"Input View: {ticker} related relative view {q_value:.1%}\n"
+                                f"This value exceeds 2x {ticker}'s historical 95th percentile ({var_result['percentile_95_annual']:.1%}).\n\n"
                                 f"{var_result['warning_message']}\n\n"
-                                f"포트폴리오 최적화를 계속 진행하지만, 보다 현실적인 수익률을 고려하시기 바랍니다."
+                                f"Portfolio optimization will continue, but please consider more realistic returns."
                             )
                             warnings_list.append(warning_msg)
                             logging.warning(warning_msg)
                     except Exception as e:
-                        # 기타 예외는 경고만 출력
+                        # Log warning for other exceptions
                         logging.error(
                             f"VaR calculation failed for {ticker}: {e}. "
                             f"Skipping optimism validation."
                         )
         else:
-            # NumPy 형식: [[1, -1, 0]]
-            # 이 경우 티커 매핑이 명확하지 않으므로 간단히 Q 값만 확인
-            # 절대값이 threshold를 초과하면 경고
+            # NumPy format: [[1, -1, 0]]
+            # Ticker mapping is unclear, so just check Q value
+            # Warn if absolute value exceeds threshold
             if abs(q_value) > threshold:
                 warning_msg = (
-                    f"⚠️ VaR 경고 (View {i+1}): 지나치게 낙관적인 수익률 예측이 감지되었습니다.\n\n"
-                    f"View {i+1}의 예상 수익률: {q_value:.1%}\n"
-                    f"NumPy 형식의 View는 자동 VaR 검증이 불가능합니다.\n"
-                    f"이 수익률이 현실적인지 확인하시기 바랍니다."
+                    f"VaR Warning (View {i+1}): Overly optimistic return prediction detected.\n\n"
+                    f"View {i+1} expected return: {q_value:.1%}\n"
+                    f"NumPy format views cannot be automatically VaR-validated.\n"
+                    f"Please verify if this return is realistic."
                 )
                 warnings_list.append(warning_msg)
                 logging.warning(warning_msg)
@@ -471,7 +471,7 @@ def get_asset_stats(
 
     # Add visualization hints for LLMs to create dashboards
     visualization_hint = {
-        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "mandatory_disclaimer": "This visualization is for reference only. Please verify raw data before making investment decisions.",
         "safety_rules": {
             "must_do": [
                 "Use ONLY data from this MCP response",
@@ -704,7 +704,7 @@ def optimize_portfolio_bl(
                 )
 
     # Parse and validate views if provided
-    var_warnings = []  # VaR 경고 메시지 저장
+    var_warnings = []  # Store VaR warning messages
     if views:
         # Parse views to P, Q matrices (handles all three formats)
         P, Q = _parse_views(views, tickers)
@@ -712,14 +712,14 @@ def optimize_portfolio_bl(
         # Normalize confidence to list format
         conf_list = _normalize_confidence(confidence, views, tickers)
 
-        # 🚨 NEW: 지나치게 낙관적인 View 검증
-        # 연환산 40% 초과 시 EGARCH VaR 분석 수행
-        # VaR 계산은 항상 3년 데이터 사용 (포트폴리오 최적화 period와 무관)
+        # NEW: Validate overly optimistic views
+        # Perform EGARCH VaR analysis when annualized return exceeds 40%
+        # VaR calculation always uses 3-year data (independent of portfolio optimization period)
         var_warnings = _validate_views_optimism(
             views=views,
             tickers=tickers,
-            period="3Y",  # VaR 계산용 기간 (항상 3년 고정)
-            threshold=0.40  # 40% 임계값
+            period="3Y",  # Period for VaR calculation (fixed at 3 years)
+            threshold=0.40  # 40% threshold
         )
 
     # Resolve date range (handles period vs absolute dates)
@@ -819,7 +819,7 @@ def optimize_portfolio_bl(
         }
     }
 
-    # VaR 경고가 있으면 결과에 포함
+    # Include VaR warnings in result if any
     if var_warnings:
         result["warnings"] = var_warnings
 
@@ -857,7 +857,7 @@ def optimize_portfolio_bl(
 
     # Add visualization hints for LLMs to create dashboards
     visualization_hint = {
-        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "mandatory_disclaimer": "This visualization is for reference only. Please verify raw data before making investment decisions.",
         "safety_rules": {
             "must_do": [
                 "Use ONLY data from this MCP response",
@@ -1648,7 +1648,7 @@ def backtest_portfolio(
 
     # Add visualization hints for LLMs to create dashboards
     visualization_hint = {
-        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "mandatory_disclaimer": "This visualization is for reference only. Please verify raw data before making investment decisions.",
         "safety_rules": {
             "must_do": [
                 "Use ONLY data from this MCP response",

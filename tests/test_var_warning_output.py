@@ -1,11 +1,10 @@
 """
-VaR 경고 메시지가 반환값에 포함되는지 테스트
+Test that VaR warning messages are included in return values.
 
-이 테스트는 80% 수익률 예측을 입력했을 때:
-1. VaR 경고가 트리거되는지
-2. 경고 메시지가 반환값의 "warnings" 필드에 포함되는지
-3. 경고 메시지에 필요한 정보가 모두 포함되어 있는지
-를 확인합니다.
+This test verifies that when an 80% return prediction is input:
+1. VaR warning is triggered
+2. Warning message is included in the "warnings" field of the return value
+3. Warning message contains all necessary information
 """
 
 import sys
@@ -19,114 +18,113 @@ from bl_mcp import tools
 
 
 def test_var_warning_in_output():
-    """80% 수익률 예측 시 VaR 경고가 반환값에 포함되는지 테스트"""
-    
+    """Test that VaR warning is included in output for 80% return prediction"""
+
     print("\n" + "="*80)
-    print("VaR 경고 출력 테스트")
+    print("VaR Warning Output Test")
     print("="*80)
-    
-    # 80% 수익률 예측 (명백히 40% 임계값 초과)
+
+    # 80% return prediction (clearly exceeds 40% threshold)
     tickers = ["NVDA", "TSLA", "INTC"]
-    views = {"P": [{"INTC": 1}], "Q": [0.80]}  # INTC 80% 수익 예측
+    views = {"P": [{"INTC": 1}], "Q": [0.80]}  # INTC 80% return prediction
     confidence = 0.5
-    
-    print(f"\n📊 입력 정보:")
+
+    print(f"\nInput Information:")
     print(f"  Tickers: {tickers}")
     print(f"  Views: {views}")
     print(f"  Confidence: {confidence}")
-    
-    # 최적화 실행
-    print(f"\n🔄 포트폴리오 최적화 실행 중...")
+
+    # Run optimization
+    print(f"\nRunning portfolio optimization...")
     result = tools.optimize_portfolio_bl(
         tickers=tickers,
         period="1Y",
         views=views,
         confidence=confidence
     )
-    
-    # 결과 확인
-    print(f"\n✅ 최적화 완료!")
-    print(f"\n📈 포트폴리오 구성:")
+
+    # Check results
+    print(f"\nOptimization complete!")
+    print(f"\nPortfolio allocation:")
     for ticker, weight in result["weights"].items():
         print(f"  {ticker}: {weight:.2%}")
-    
-    print(f"\n📊 성과 지표:")
-    print(f"  기대 수익률: {result['expected_return']:.2%}")
-    print(f"  변동성: {result['volatility']:.2%}")
-    print(f"  샤프 비율: {result['sharpe_ratio']:.2f}")
-    
-    # VaR 경고 확인
+
+    print(f"\nPerformance metrics:")
+    print(f"  Expected return: {result['expected_return']:.2%}")
+    print(f"  Volatility: {result['volatility']:.2%}")
+    print(f"  Sharpe ratio: {result['sharpe_ratio']:.2f}")
+
+    # Verify VaR warning
     print(f"\n" + "="*80)
-    print("VaR 경고 검증")
+    print("VaR Warning Verification")
     print("="*80)
-    
+
     if "warnings" in result:
-        print(f"\n✅ 경고 필드 발견! (총 {len(result['warnings'])}개)")
-        
+        print(f"\nWarning field found! (Total {len(result['warnings'])} warnings)")
+
         for i, warning in enumerate(result["warnings"], 1):
-            print(f"\n⚠️ 경고 {i}:")
+            print(f"\nWarning {i}:")
             print("-" * 80)
             print(warning)
             print("-" * 80)
-            
-            # 경고 메시지 내용 검증
-            assert "VaR 경고" in warning, "경고 메시지에 'VaR 경고'가 포함되어야 함"
-            assert "INTC" in warning, "경고 메시지에 티커(INTC)가 포함되어야 함"
-            assert "80" in warning or "0.8" in warning, "경고 메시지에 예측 수익률(80%)이 포함되어야 함"
-            assert "95th percentile" in warning, "경고 메시지에 '95th percentile'이 포함되어야 함"
-            
-        print(f"\n✅ 모든 경고 메시지 검증 통과!")
-        
+
+            # Verify warning message content
+            assert "VaR" in warning, "Warning message should contain 'VaR'"
+            assert "INTC" in warning, "Warning message should contain ticker (INTC)"
+            assert "80" in warning or "0.8" in warning, "Warning message should contain predicted return (80%)"
+            assert "95th percentile" in warning, "Warning message should contain '95th percentile'"
+
+        print(f"\nAll warning message verifications passed!")
+
     else:
-        print(f"\n❌ 실패: 'warnings' 필드가 결과에 없습니다!")
-        print(f"\n결과 키: {list(result.keys())}")
-        raise AssertionError("VaR 경고가 반환값에 포함되지 않았습니다.")
-    
+        print(f"\nFailed: 'warnings' field not found in result!")
+        print(f"\nResult keys: {list(result.keys())}")
+        raise AssertionError("VaR warning was not included in return value.")
+
     print(f"\n" + "="*80)
-    print("테스트 성공! ✅")
+    print("Test passed!")
     print("="*80)
 
 
 def test_no_warning_for_low_return():
-    """낮은 수익률 예측 시 경고가 없는지 테스트"""
-    
+    """Test that no warning is issued for low return predictions"""
+
     print("\n" + "="*80)
-    print("낮은 수익률 예측 테스트 (경고 없어야 함)")
+    print("Low Return Prediction Test (should have no warning)")
     print("="*80)
-    
-    # 10% 수익률 예측 (40% 임계값 미만)
+
+    # 10% return prediction (below 40% threshold)
     tickers = ["AAPL", "MSFT", "GOOGL"]
-    views = {"P": [{"AAPL": 1}], "Q": [0.10]}  # AAPL 10% 수익 예측
-    
-    print(f"\n📊 입력 정보:")
+    views = {"P": [{"AAPL": 1}], "Q": [0.10]}  # AAPL 10% return prediction
+
+    print(f"\nInput Information:")
     print(f"  Tickers: {tickers}")
     print(f"  Views: {views}")
-    
-    # 최적화 실행
-    print(f"\n🔄 포트폴리오 최적화 실행 중...")
+
+    # Run optimization
+    print(f"\nRunning portfolio optimization...")
     result = tools.optimize_portfolio_bl(
         tickers=tickers,
         period="1Y",
         views=views,
         confidence=0.7
     )
-    
-    # 경고 확인
+
+    # Check for warnings
     if "warnings" in result:
-        print(f"\n⚠️ 예상치 못한 경고 발생:")
+        print(f"\nUnexpected warning occurred:")
         for warning in result["warnings"]:
             print(warning)
-        raise AssertionError("10% 수익률 예측에서 경고가 발생하면 안 됩니다.")
+        raise AssertionError("Warning should not be issued for 10% return prediction.")
     else:
-        print(f"\n✅ 경고 없음 (정상)")
-    
+        print(f"\nNo warnings (as expected)")
+
     print(f"\n" + "="*80)
-    print("테스트 성공! ✅")
+    print("Test passed!")
     print("="*80)
 
 
 if __name__ == "__main__":
     test_var_warning_in_output()
     test_no_warning_for_low_return()
-    print(f"\n🎉 모든 테스트 통과!")
-
+    print(f"\nAll tests passed!")

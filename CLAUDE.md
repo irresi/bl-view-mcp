@@ -73,45 +73,37 @@ git push origin feature-branch
 # → GitHub에서 PR 생성 → 리뷰 → Merge
 ```
 
-## Current Architecture (2025-11-23)
+## Current Architecture (2025-11-24)
 
-### MCP Tools
+### MCP Tools (5개)
 
 | Tool | 용도 | 비고 |
 |------|------|------|
-| `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구, VaR 경고 포함 |
-| `backtest_portfolio` | 포트폴리오 백테스팅 | Phase 2 |
-| `calculate_var_egarch` | EGARCH 기반 VaR 계산 | **NEW** View 검증용 |
-| `upload_price_data` | 커스텀 가격 데이터 업로드 | 소량 데이터용 |
-| `upload_price_data_from_file` | 파일에서 가격 데이터 로드 | 대량 데이터용 |
+| `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구, VaR 경고 + sensitivity 분석 |
+| `backtest_portfolio` | 포트폴리오 백테스팅 | timeseries, drawdown_details, 전략 비교 |
+| `get_asset_stats` | 자산 통계 조회 | **NEW** VaR, 상관행렬, 공분산 포함 |
+| `upload_price_data` | 커스텀 가격 데이터 업로드 | 직접입력 + 파일 통합 |
 | `list_available_tickers` | 사용 가능 티커 조회 | 검색/필터 지원 |
 
 ```
 server.py (@mcp.tool)
-    ├── optimize_portfolio_bl()
-    │       └── tools.py (business logic)
-    │               ├── _parse_views()
-    │               ├── _normalize_confidence()
-    │               └── BlackLittermanModel(omega="idzorek")
-    ├── backtest_portfolio()       ← NEW
+    ├── optimize_portfolio_bl()      # sensitivity_range 지원
     │       └── tools.py
-    │               ├── _simulate_portfolio()
-    │               ├── _calculate_returns_metrics()
-    │               └── _calculate_benchmark_metrics()
-    ├── upload_price_data()
-    │       └── data_loader.save_custom_price_data()
-    ├── upload_price_data_from_file()
-    │       └── data_loader.load_and_save_from_file()
+    ├── backtest_portfolio()         # compare_strategies, include_equal_weight
+    │       └── tools.py
+    ├── get_asset_stats()            # NEW: VaR, correlation, covariance
+    │       └── tools.py
+    ├── upload_price_data()          # 직접입력 + 파일경로 통합
+    │       └── data_loader.py
     └── list_available_tickers()
-            └── data_loader.list_tickers()
+            └── data_loader.py
 ```
 
-**이전 구조에서 삭제됨**:
-- ~~calculate_expected_returns~~
-- ~~calculate_covariance_matrix~~
-- ~~create_investor_view~~
+**삭제된 도구**:
+- ~~`calculate_var_egarch`~~ → `get_asset_stats`에 VaR 통합
+- ~~`upload_price_data_from_file`~~ → `upload_price_data`에 통합
 
-**이유**: LLM이 불필요하게 중간 단계를 호출하는 것 방지, 토큰 효율성 향상
+**설계 철학**: 도구 수 최소화 (5개), 파라미터로 기능 확장
 
 ### Key Parameters
 
@@ -123,11 +115,28 @@ optimize_portfolio_bl(
     views: dict = None,           # P, Q 형식만 지원
     confidence: float | list = None,  # 0.0-1.0 또는 리스트
     investment_style: str = "balanced",  # aggressive/balanced/conservative
-    risk_aversion: float = None   # 고급 사용자용 (사용 비권장)
+    risk_aversion: float = None,  # 고급 사용자용 (사용 비권장)
+    sensitivity_range: list[float] = None  # NEW: [0.3, 0.5, 0.9] 신뢰도 민감도 분석
 )
 ```
 
 **삭제됨**: `market_caps` 파라미터 → 자동 로드
+
+### get_asset_stats Parameters
+
+```python
+get_asset_stats(
+    tickers: list[str],           # ["AAPL", "MSFT", "GOOGL"]
+    period: str = "1Y",           # "1Y", "6M", "3M" (권장)
+    include_var: bool = True      # False로 설정 시 빠른 응답 (EGARCH VaR 건너뜀)
+)
+# Returns:
+# - assets: {ticker: {current_price, annual_return, volatility, sharpe, max_drawdown, market_cap, var_95, percentile_95}}
+# - correlation_matrix: {ticker: {ticker: correlation}}
+# - covariance_matrix: {ticker: {ticker: covariance}}
+#
+# Note: VaR 계산 기간 = period (최소 1Y, 기본 3Y)
+```
 
 ### Views Format (P, Q Only)
 
@@ -154,7 +163,7 @@ confidence = None       # 기본값 0.5
 
 **삭제됨**: dict 형식 (`{"AAPL": 0.9}`) 더 이상 지원 안 함
 
-### backtest_portfolio Parameters (NEW)
+### backtest_portfolio Parameters
 
 ```python
 backtest_portfolio(
@@ -165,7 +174,10 @@ backtest_portfolio(
     strategy: str = "passive_rebalance",  # buy_and_hold/passive_rebalance/risk_managed
     benchmark: str = "SPY",       # 벤치마크 (None으로 비활성화)
     initial_capital: float = 10000.0,
-    custom_config: dict = None    # 고급 설정 (strategy 오버라이드)
+    custom_config: dict = None,   # 고급 설정 (strategy 오버라이드)
+    compare_strategies: bool = False,   # 모든 전략 비교 (comparisons 필드 추가)
+    include_equal_weight: bool = False, # 동일비중 포트폴리오 비교 (equal_weight 필드 추가)
+    timeseries_freq: str = "monthly"    # daily/weekly/monthly (timeseries 샘플링 빈도)
 )
 ```
 
@@ -224,6 +236,43 @@ custom_config = {
     "holding_periods": {
         "AAPL": {"days": 730, "is_long_term": True},
         ...
+    },
+
+    # Timeseries (timeseries_freq로 빈도 조절)
+    # - "daily": {"date": "2023-01-15", ...} (모든 거래일, 장기간엔 데이터 큼)
+    # - "weekly": {"date": "2023-01-20", ...} (금요일 기준)
+    # - "monthly": {"date": "2023-01", ...} (기본값, 권장)
+    "timeseries": [
+        {"date": "2023-01", "value": 10250, "benchmark": 10100, "drawdown": -0.02},
+        {"date": "2023-02", "value": 10500, "benchmark": 10300, "drawdown": 0.0},
+        ...
+    ],
+
+    # Drawdown Details
+    "drawdown_details": {
+        "max_drawdown": -0.15,
+        "max_drawdown_start": "2023-03-01",
+        "max_drawdown_end": "2023-04-15",
+        "recovery_date": "2023-06-01",  # None if not recovered
+        "recovery_days": 47              # None if not recovered
+    },
+
+    # Strategy Comparisons (compare_strategies=True일 때만)
+    # 선택한 strategy 제외한 나머지 전략 비교
+    # 각 전략: total_return, cagr, volatility, sharpe_ratio, sortino_ratio,
+    #         max_drawdown, calmar_ratio, final_value
+    "comparisons": {
+        "buy_and_hold": {"total_return": 0.22, "sharpe_ratio": 0.58, "final_value": 12200, ...},
+        "risk_managed": {"total_return": 0.18, "sharpe_ratio": 0.72, "final_value": 11800, ...}
+    },
+
+    # Equal Weight (include_equal_weight=True일 때만)
+    # 동일 가중치 포트폴리오와 비교
+    "equal_weight": {
+        "total_return": 0.20,
+        "sharpe_ratio": 0.55,
+        "final_value": 12000,
+        "weights": {"AAPL": 0.333, "MSFT": 0.333, "GOOGL": 0.333}
     }
 }
 ```
@@ -253,20 +302,14 @@ if "warnings" in result:
 - 절대 View: Q > 40% 이고 Q > 95th percentile 수익률
 - 상대 View: Q > 95th percentile × 2
 
-**calculate_var_egarch 도구**:
+**VaR 정보 조회** (`get_asset_stats` 사용):
 
 ```python
-# 직접 VaR 확인
-var_result = calculate_var_egarch(
-    ticker="NVDA",
-    period="3Y",
-    confidence_level=0.95
-)
-# Returns:
-# - var_95_annual: 연환산 VaR 95%
-# - percentile_95_annual: 95th percentile 수익률
-# - current_volatility: 현재 변동성
-# - egarch_params: 모델 파라미터
+# VaR 95%는 get_asset_stats에 통합됨
+stats = get_asset_stats(tickers=["NVDA"], period="1Y")
+nvda = stats["assets"]["NVDA"]
+print(f"VaR 95%: {nvda['var_95']:.1%}")           # 35%
+print(f"95th percentile: {nvda['percentile_95']:.1%}")  # 75%
 ```
 
 ### Typical Workflow
@@ -380,36 +423,48 @@ make web-ui         # localhost:8000에서 ADK Web UI 시작
 
 ## Recent Changes (2025-11-24)
 
-1. **VaR 경고 시스템** (NEW):
-   - EGARCH(1,1) 모델 기반 View 검증
-   - 40% 초과 View 시 자동 VaR 분석
-   - `warnings` 필드로 경고 반환 (계산 중단 안 함)
-   - `calculate_var_egarch` MCP tool 추가
-   - `arch>=6.0.0` 의존성 추가
+### Phase 3 개선 (이번 업데이트)
 
-2. **시가총액 자동 로드**: `market_caps` 파라미터 제거, yfinance에서 자동 다운로드
-3. **Parquet 캐싱**: 한 번 가져온 시가총액은 `data/market_caps.parquet`에 저장
-4. **Ticker 정렬 제거**: 사용자 입력 순서 유지
-5. **Type hint 수정**: `confidence: float | list` (dict 제거)
-6. **커스텀 데이터 지원**:
-   - `upload_price_data`: 소량 가격 데이터 직접 업로드
-   - `upload_price_data_from_file`: CSV/Parquet 파일에서 로드
-   - `list_available_tickers`: 사용 가능 티커 조회
+1. **`get_asset_stats` 신규 도구**:
+   - 자산별 통계 (가격, 수익률, 변동성, 샤프, 시가총액)
+   - VaR 95% 및 95th percentile 포함 (EGARCH 기반)
+   - 상관행렬, 공분산행렬 제공
+   - `calculate_var_egarch` 도구 통합 후 삭제
+
+2. **`backtest_portfolio` 확장**:
+   - `timeseries`: 월별 샘플링된 포트폴리오 가치
+   - `drawdown_details`: 최대 낙폭 시작/종료/회복 날짜
+   - `compare_strategies`: 모든 전략 한 번에 비교
+   - `include_equal_weight`: 동일비중 포트폴리오 비교
+
+3. **`optimize_portfolio_bl` 확장**:
+   - `sensitivity_range`: 신뢰도별 민감도 분석
+   - 예: `[0.3, 0.5, 0.9]` → 각 신뢰도에서 결과 반환
+
+4. **`upload_price_data` 통합**:
+   - `upload_price_data_from_file` 기능 통합
+   - `prices` 또는 `file_path` 중 하나 선택
+
+5. **도구 수 최적화**: 5개 유지 (기능은 확장)
+
+### 이전 업데이트 (2025-11-23)
+
+- VaR 경고 시스템, 시가총액 자동 로드, Parquet 캐싱 등
 
 ## Custom Data Support
 
 ### 사용 시나리오
 
-| 케이스 | 도구 | 예시 |
+| 케이스 | 방법 | 예시 |
 |--------|------|------|
-| 소량 데이터 (< 100행) | `upload_price_data` | LLM이 데이터 전달 |
-| 대량 데이터 / 파일 | `upload_price_data_from_file` | CSV/Parquet 경로 |
+| 소량 데이터 (< 100행) | `upload_price_data(prices=...)` | LLM이 데이터 전달 |
+| 대량 데이터 / 파일 | `upload_price_data(file_path=...)` | CSV/Parquet 경로 |
 | 외부 MCP 연동 | 파일 경로 전달 | 다른 MCP가 파일 저장 → bl-mcp가 로드 |
 
 ### 업로드 예시
 
 ```python
-# 1. 직접 업로드 (소량)
+# 1. 직접 업로드 (소량) - prices 파라미터
 upload_price_data(
     ticker="005930.KS",  # 삼성전자
     prices=[
@@ -420,8 +475,8 @@ upload_price_data(
     source="pykrx"
 )
 
-# 2. 파일에서 로드 (대량)
-upload_price_data_from_file(
+# 2. 파일에서 로드 (대량) - file_path 파라미터
+upload_price_data(
     ticker="KOSPI",
     file_path="/path/to/kospi.csv",
     date_column="Date",
@@ -439,7 +494,7 @@ optimize_portfolio_bl(
 
 ```
 [외부 MCP: pykrx-mcp]          [bl-mcp]
-get_korean_stock_prices()  →  upload_price_data_from_file()
+get_korean_stock_prices()  →  upload_price_data(file_path=...)
   └── /tmp/005930.parquet        └── 내부 캐시로 복사
 
 optimize_portfolio_bl(["005930.KS", "AAPL"])

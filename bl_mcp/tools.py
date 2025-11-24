@@ -330,6 +330,228 @@ def _normalize_confidence(
         )
 
 
+def get_asset_stats(
+    tickers: list[str],
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_var: bool = True
+) -> dict:
+    """
+    Get comprehensive statistics for a list of assets.
+
+    This tool provides individual asset metrics along with correlation
+    and covariance matrices - useful for understanding asset relationships
+    before portfolio optimization.
+
+    Args:
+        tickers: List of ticker symbols (e.g., ["AAPL", "MSFT", "GOOGL"])
+        period: Relative period ("1Y", "6M", "3M") - RECOMMENDED
+        start_date: Specific start date (YYYY-MM-DD)
+        end_date: Specific end date (YYYY-MM-DD)
+        include_var: Include VaR calculation (default: True)
+                    Set to False for faster response (skips EGARCH VaR)
+
+    Returns:
+        Dictionary containing:
+        - assets: Per-asset statistics
+        - correlation_matrix: Asset correlations
+        - covariance_matrix: Asset covariances (annualized)
+        - period: Data period used
+    """
+    import logging
+    logging.warning("=" * 80)
+    logging.warning(f"🔍 get_asset_stats CALLED:")
+    logging.warning(f"  📋 tickers = {tickers!r}")
+    logging.warning(f"  📅 period = {period!r}")
+    logging.warning("=" * 80)
+
+    # Validate inputs
+    validators.validate_tickers(tickers)
+
+    # Resolve date range
+    start_date, end_date = validators.resolve_date_range(
+        period=period,
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    # Load price data
+    prices = data_loader.load_prices(tickers, start_date, end_date)
+
+    # Calculate daily returns
+    returns = prices.pct_change().dropna()
+
+    # Calculate covariance matrix (annualized, Ledoit-Wolf shrinkage)
+    S = risk_models.CovarianceShrinkage(prices).ledoit_wolf()
+
+    # Calculate correlation matrix from covariance
+    # corr = cov / (std_i * std_j)
+    std = np.sqrt(np.diag(S))
+    correlation = S / np.outer(std, std)
+
+    # Get market caps
+    mcaps = data_loader.get_market_caps(tickers)
+
+    # Risk-free rate for Sharpe calculation
+    risk_free_rate = 0.02
+
+    # Calculate per-asset statistics
+    assets_stats = {}
+    for ticker in tickers:
+        ticker_returns = returns[ticker]
+
+        # Current price (most recent)
+        current_price = float(prices[ticker].iloc[-1])
+
+        # Annual return (CAGR)
+        total_return = (1 + ticker_returns).prod() - 1
+        years = len(ticker_returns) / 252
+        annual_return = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0
+
+        # Volatility (annualized)
+        volatility = float(ticker_returns.std() * np.sqrt(252))
+
+        # Sharpe ratio
+        sharpe = (annual_return - risk_free_rate) / volatility if volatility > 0 else 0
+
+        # Market cap
+        market_cap = float(mcaps.get(ticker, 0))
+
+        # Historical Maximum Drawdown (MDD)
+        ticker_prices = prices[ticker]
+        cumulative = ticker_prices / ticker_prices.iloc[0]
+        running_max = cumulative.cummax()
+        drawdown = (cumulative - running_max) / running_max
+        max_drawdown = float(drawdown.min())
+
+        # VaR 95% (EGARCH-based) - optional for performance
+        var_95 = None
+        percentile_95 = None
+        if include_var:
+            try:
+                # Use the same period as stats, default to "3Y" if not specified
+                var_period = period if period else "3Y"
+                # EGARCH needs sufficient data, minimum "1Y"
+                if var_period in ["1M", "3M", "6M"]:
+                    var_period = "1Y"  # Minimum for reliable EGARCH
+                var_result = calculate_var_egarch(ticker, period=var_period)
+                var_95 = round(var_result.get("var_95_annual", 0), 4)
+                percentile_95 = round(var_result.get("percentile_95_annual", 0), 4)
+            except Exception as e:
+                logging.warning(f"  ⚠️ VaR calculation failed for {ticker}: {e}")
+
+        assets_stats[ticker] = {
+            "current_price": round(current_price, 2),
+            "annual_return": round(float(annual_return), 4),
+            "volatility": round(volatility, 4),
+            "sharpe_ratio": round(float(sharpe), 4),
+            "max_drawdown": round(max_drawdown, 4),
+            "market_cap": market_cap,
+            "var_95": var_95,
+            "percentile_95": percentile_95,
+        }
+
+    # Convert matrices to nested dict format
+    correlation_dict = {
+        ticker: {
+            other: round(float(correlation.loc[ticker, other]), 4)
+            for other in tickers
+        }
+        for ticker in tickers
+    }
+
+    covariance_dict = {
+        ticker: {
+            other: round(float(S.loc[ticker, other]), 6)
+            for other in tickers
+        }
+        for ticker in tickers
+    }
+
+    # Add visualization hints for LLMs to create dashboards
+    visualization_hint = {
+        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "safety_rules": {
+            "must_do": [
+                "Use ONLY data from this MCP response",
+                "Show raw numbers table alongside every chart",
+                "Include disclaimer in dashboard",
+                "Correlation heatmap scale: fixed -1 to +1",
+                "Keep at least 2 decimal places",
+            ],
+            "must_not_do": [
+                "Fabricate or interpolate missing values",
+                "Round aggressively (0.7523 → 0.75 loses precision)",
+                "Auto-scale correlation heatmap",
+                "Confuse percentage vs decimal (0.75 ≠ 75)",
+            ],
+        },
+        "recommended_charts": [
+            "bar_chart",
+            "heatmap",
+            "scatter_plot",
+            "metrics_table",
+            "raw_data_table",
+        ],
+        "bar_chart": {
+            "title": "Asset Comparison",
+            "data_field": "assets",
+            "metrics": ["annual_return", "volatility", "sharpe_ratio", "max_drawdown"],
+            "description": "Compare key metrics across all assets",
+        },
+        "heatmap": {
+            "title": "Correlation Matrix",
+            "data_field": "correlation_matrix",
+            "color_scale": {"min": -1, "max": 1, "colors": ["red", "white", "green"]},
+            "description": "Show asset correlations - FIXED scale -1 to +1",
+        },
+        "scatter_plot": {
+            "title": "Risk vs Return",
+            "data_field": "assets",
+            "x": "volatility",
+            "y": "annual_return",
+            "label": "ticker",
+            "description": "Plot each asset on risk-return space",
+        },
+        "metrics_table": {
+            "title": "Asset Statistics",
+            "data_field": "assets",
+            "fields": [
+                {"key": "current_price", "format": "currency", "label": "Price"},
+                {"key": "annual_return", "format": "percent", "label": "Annual Return"},
+                {"key": "volatility", "format": "percent", "label": "Volatility"},
+                {"key": "sharpe_ratio", "format": "decimal", "label": "Sharpe"},
+                {"key": "max_drawdown", "format": "percent", "label": "Max DD"},
+                {"key": "var_95", "format": "percent", "label": "VaR 95%"},
+                {"key": "percentile_95", "format": "percent", "label": "95th %ile"},
+            ],
+        },
+    }
+
+    # Add VaR-specific chart if VaR was included
+    if include_var:
+        visualization_hint["recommended_charts"].append("var_bar_chart")
+        visualization_hint["var_bar_chart"] = {
+            "title": "VaR Comparison",
+            "data_field": "assets",
+            "metrics": ["var_95", "percentile_95"],
+            "description": "Compare VaR and 95th percentile across assets",
+        }
+
+    return {
+        "assets": assets_stats,
+        "correlation_matrix": correlation_dict,
+        "covariance_matrix": covariance_dict,
+        "period": {
+            "start": start_date,
+            "end": end_date or prices.index[-1].strftime("%Y-%m-%d"),
+            "trading_days": len(prices)
+        },
+        "_visualization_hint": visualization_hint
+    }
+
+
 def optimize_portfolio_bl(
     tickers: list[str],
     start_date: Optional[str] = None,
@@ -338,7 +560,8 @@ def optimize_portfolio_bl(
     views: Optional[dict] = None,
     confidence: Optional[float | list] = None,  # Can be float or list
     investment_style: str = "balanced",
-    risk_aversion: Optional[float] = None  # Advanced parameter (last)
+    risk_aversion: Optional[float] = None,  # Advanced parameter
+    sensitivity_range: Optional[list[float]] = None  # Sensitivity analysis
 ) -> dict:
     """
     Optimize portfolio using Black-Litterman model.
@@ -599,6 +822,103 @@ def optimize_portfolio_bl(
     # VaR 경고가 있으면 결과에 포함
     if var_warnings:
         result["warnings"] = var_warnings
+
+    # Sensitivity analysis (different confidence levels)
+    if sensitivity_range and views:
+        sensitivity_results = []
+        for conf_value in sensitivity_range:
+            try:
+                # Normalize confidence to list format
+                sens_conf_list = [conf_value] * len(views["Q"])
+
+                # Create new BL model with different confidence
+                sens_bl = BlackLittermanModel(
+                    S,
+                    pi=market_prior,
+                    P=P,
+                    Q=Q,
+                    omega="idzorek",
+                    view_confidences=sens_conf_list
+                )
+                sens_weights = sens_bl.bl_weights()
+                sens_perf = sens_bl.portfolio_performance(verbose=False)
+
+                sensitivity_results.append({
+                    "confidence": conf_value,
+                    "weights": sens_weights.to_dict() if hasattr(sens_weights, 'to_dict') else dict(sens_weights),
+                    "expected_return": round(sens_perf[0], 4),
+                    "volatility": round(sens_perf[1], 4),
+                    "sharpe_ratio": round(sens_perf[2], 4),
+                })
+            except Exception as e:
+                logging.warning(f"  ⚠️ Sensitivity analysis failed for confidence={conf_value}: {e}")
+
+        result["sensitivity"] = sensitivity_results
+
+    # Add visualization hints for LLMs to create dashboards
+    visualization_hint = {
+        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "safety_rules": {
+            "must_do": [
+                "Use ONLY data from this MCP response",
+                "Show raw numbers table alongside every chart",
+                "Include disclaimer in dashboard",
+                "Verify weights sum to ~1.0 before pie chart",
+                "Keep at least 2 decimal places",
+            ],
+            "must_not_do": [
+                "Fabricate or interpolate missing values",
+                "Round aggressively (0.4312 → 0.4 loses precision)",
+                "Confuse percentage vs decimal (0.43 ≠ 43)",
+            ],
+        },
+        "recommended_charts": [
+            "pie_chart",
+            "bar_chart",
+            "metrics_table",
+            "raw_data_table",
+        ],
+        "pie_chart": {
+            "title": "Portfolio Allocation",
+            "data_field": "weights",
+            "description": "Show weight allocation - verify sum ≈ 1.0",
+        },
+        "bar_chart": {
+            "title": "Prior vs Posterior Returns",
+            "data_fields": ["prior_returns", "posterior_returns"],
+            "description": "Compare market equilibrium returns vs adjusted returns after views",
+        },
+        "metrics_table": {
+            "title": "Portfolio Metrics",
+            "fields": [
+                {"key": "expected_return", "format": "percent", "label": "Expected Return"},
+                {"key": "volatility", "format": "percent", "label": "Volatility"},
+                {"key": "sharpe_ratio", "format": "decimal", "label": "Sharpe Ratio"},
+                {"key": "risk_aversion", "format": "decimal", "label": "Risk Aversion (δ)"},
+            ],
+        },
+    }
+
+    # Add sensitivity chart if sensitivity analysis was performed
+    if sensitivity_range and views and "sensitivity" in result:
+        visualization_hint["recommended_charts"].append("stacked_bar_chart")
+        visualization_hint["stacked_bar_chart"] = {
+            "title": "Sensitivity Analysis",
+            "data_field": "sensitivity",
+            "x": "confidence",
+            "y": "weights",
+            "description": "Show how weights change across different confidence levels",
+        }
+
+    # Add risk indicator
+    visualization_hint["risk_indicator"] = {
+        "title": "Risk Profile",
+        "data_field": "risk_aversion",
+        "scale": {"min": 1, "max": 15, "low_label": "Aggressive", "high_label": "Conservative"},
+        "description": "Visual indicator of risk aversion level",
+    }
+
+    result["_visualization_hint"] = visualization_hint
 
     return result
 
@@ -1015,6 +1335,35 @@ def _simulate_portfolio(
             "is_long_term": days >= 365,  # For tax purposes
         }
 
+    # Calculate drawdown details
+    cumulative = portfolio_series / portfolio_series.iloc[0]
+    running_max = cumulative.cummax()
+    drawdown = (cumulative - running_max) / running_max
+
+    # Find max drawdown details
+    max_dd_idx = drawdown.idxmin()
+    max_dd_value = drawdown.min()
+
+    # Find drawdown start (peak before max drawdown)
+    peak_idx = cumulative.loc[:max_dd_idx].idxmax()
+
+    # Find recovery date (when portfolio returns to peak)
+    recovery_idx = None
+    recovery_days = None
+    after_trough = cumulative.loc[max_dd_idx:]
+    recovered = after_trough[after_trough >= cumulative.loc[peak_idx]]
+    if len(recovered) > 0:
+        recovery_idx = recovered.index[0]
+        recovery_days = (recovery_idx - max_dd_idx).days
+
+    drawdown_details = {
+        "max_drawdown": float(max_dd_value),
+        "max_drawdown_start": peak_idx.strftime("%Y-%m-%d"),
+        "max_drawdown_end": max_dd_idx.strftime("%Y-%m-%d"),
+        "recovery_date": recovery_idx.strftime("%Y-%m-%d") if recovery_idx else None,
+        "recovery_days": recovery_days,
+    }
+
     metadata = {
         "total_fees_paid": total_fees_paid,
         "num_rebalances": num_rebalances,
@@ -1022,6 +1371,8 @@ def _simulate_portfolio(
         "is_liquidated": is_liquidated,
         "liquidation_reason": liquidation_reason,
         "holding_periods": holding_periods,
+        "drawdown_details": drawdown_details,
+        "portfolio_series": portfolio_series,  # Pass for timeseries generation
     }
 
     return portfolio_series, metadata
@@ -1036,7 +1387,10 @@ def backtest_portfolio(
     strategy: str = "passive_rebalance",
     benchmark: Optional[str] = "SPY",
     initial_capital: float = 10000.0,
-    custom_config: Optional[dict] = None
+    custom_config: Optional[dict] = None,
+    compare_strategies: bool = False,
+    include_equal_weight: bool = False,
+    timeseries_freq: str = "monthly"
 ) -> dict:
     """
     Backtest a portfolio with specified weights.
@@ -1064,9 +1418,14 @@ def backtest_portfolio(
         initial_capital: Starting capital (default: 10000)
         custom_config: Advanced config to override strategy preset (dict)
                       See BacktestConfig for available options
+        compare_strategies: If True, compare all strategy presets (default: False)
+        include_equal_weight: If True, include equal-weight portfolio comparison (default: False)
 
     Returns:
-        Dictionary containing performance metrics, costs, and benchmark comparison
+        Dictionary containing performance metrics, costs, and benchmark comparison.
+        If compare_strategies=True, includes 'comparisons' with results for all strategies.
+        If include_equal_weight=True, includes 'equal_weight' comparison.
+        Always includes 'timeseries' (monthly sampled) and 'drawdown_details'.
     """
     import logging
     logging.warning("=" * 80)
@@ -1096,6 +1455,11 @@ def backtest_portfolio(
     for ticker, weight in weights.items():
         if weight < 0:
             raise ValueError(f"Weight for {ticker} cannot be negative: {weight}")
+
+    # Validate timeseries_freq
+    valid_freqs = ["daily", "weekly", "monthly"]
+    if timeseries_freq not in valid_freqs:
+        raise ValueError(f"timeseries_freq must be one of {valid_freqs}, got '{timeseries_freq}'")
 
     # Get configuration from strategy or custom_config
     if custom_config is not None:
@@ -1167,6 +1531,7 @@ def backtest_portfolio(
     metrics["holding_periods"] = metadata["holding_periods"]
 
     # Benchmark comparison
+    benchmark_series = None
     if benchmark_prices is not None:
         benchmark_returns = benchmark_prices.pct_change().dropna()
         benchmark_metrics = _calculate_benchmark_metrics(
@@ -1174,6 +1539,8 @@ def backtest_portfolio(
             benchmark_returns
         )
         metrics.update(benchmark_metrics)
+        # Calculate benchmark series for timeseries
+        benchmark_series = (1 + benchmark_returns).cumprod() * initial_capital
 
     # Period info
     metrics["period"] = {
@@ -1185,5 +1552,186 @@ def backtest_portfolio(
     # Strategy info
     metrics["strategy"] = strategy
     metrics["config"] = config
+
+    # Add drawdown_details
+    metrics["drawdown_details"] = metadata["drawdown_details"]
+
+    # Generate timeseries (configurable frequency)
+    portfolio_series = metadata["portfolio_series"]
+
+    # Determine resampling rule and date format
+    freq_map = {
+        "daily": (None, "%Y-%m-%d"),     # No resampling
+        "weekly": ("W-FRI", "%Y-%m-%d"),  # Weekly (Friday)
+        "monthly": ("ME", "%Y-%m"),       # Monthly (end)
+    }
+    resample_rule, date_format = freq_map.get(timeseries_freq, ("ME", "%Y-%m"))
+
+    if resample_rule is None:
+        # Daily: no resampling
+        sampled_values = portfolio_series
+    else:
+        sampled_values = portfolio_series.resample(resample_rule).last()
+
+    # Calculate drawdown at each point
+    cumulative = portfolio_series / portfolio_series.iloc[0]
+    running_max = cumulative.cummax()
+    drawdown = (cumulative - running_max) / running_max
+
+    if resample_rule is None:
+        sampled_drawdown = drawdown
+    else:
+        sampled_drawdown = drawdown.resample(resample_rule).last()
+
+    # Resample benchmark if needed
+    sampled_benchmark = None
+    if benchmark_series is not None:
+        if resample_rule is None:
+            sampled_benchmark = benchmark_series
+        else:
+            sampled_benchmark = benchmark_series.resample(resample_rule).last()
+
+    # Build timeseries list
+    timeseries = []
+    for date in sampled_values.index:
+        entry = {
+            "date": date.strftime(date_format),
+            "value": round(float(sampled_values.loc[date]), 2),
+            "drawdown": round(float(sampled_drawdown.loc[date]), 4),
+        }
+        if sampled_benchmark is not None and date in sampled_benchmark.index:
+            entry["benchmark"] = round(float(sampled_benchmark.loc[date]), 2)
+        timeseries.append(entry)
+
+    metrics["timeseries"] = timeseries
+
+    # Strategy comparisons
+    if compare_strategies:
+        comparisons = {}
+        for strat_name, strat_config in STRATEGY_PRESETS.items():
+            if strat_name == strategy:
+                continue  # Skip the primary strategy
+            try:
+                strat_values, strat_metadata = _simulate_portfolio(
+                    portfolio_prices,
+                    available_weights,
+                    strat_config,
+                    initial_capital
+                )
+                strat_returns = strat_values.pct_change().dropna()
+                strat_metrics = _calculate_returns_metrics(strat_returns)
+                strat_metrics["final_value"] = float(strat_values.iloc[-1])
+                strat_metrics["is_liquidated"] = strat_metadata["is_liquidated"]
+                strat_metrics["liquidation_reason"] = strat_metadata["liquidation_reason"]
+                comparisons[strat_name] = strat_metrics
+            except Exception as e:
+                logging.warning(f"  ⚠️ Strategy comparison failed for {strat_name}: {e}")
+        metrics["comparisons"] = comparisons
+
+    # Equal weight comparison
+    if include_equal_weight:
+        try:
+            equal_weights = {t: 1.0 / len(available_weights) for t in available_weights}
+            eq_values, eq_metadata = _simulate_portfolio(
+                portfolio_prices,
+                equal_weights,
+                config,
+                initial_capital
+            )
+            eq_returns = eq_values.pct_change().dropna()
+            eq_metrics = _calculate_returns_metrics(eq_returns)
+            eq_metrics["final_value"] = float(eq_values.iloc[-1])
+            eq_metrics["weights"] = equal_weights
+            metrics["equal_weight"] = eq_metrics
+        except Exception as e:
+            logging.warning(f"  ⚠️ Equal weight comparison failed: {e}")
+
+    # Add visualization hints for LLMs to create dashboards
+    visualization_hint = {
+        "mandatory_disclaimer": "이 시각화는 참고용입니다. 투자 결정 전 원본 데이터를 확인하세요.",
+        "safety_rules": {
+            "must_do": [
+                "Use ONLY data from this MCP response",
+                "Show raw numbers table alongside every chart",
+                "Include disclaimer in dashboard",
+                "Drawdowns MUST be visually prominent (red area below 0)",
+                "Keep at least 2 decimal places",
+            ],
+            "must_not_do": [
+                "Fabricate or interpolate missing timeseries points",
+                "Round aggressively (15.23% → 15% loses precision)",
+                "Hide drawdown troughs or flatten Y-axis",
+                "Confuse percentage vs decimal (0.15 ≠ 15)",
+            ],
+        },
+        "recommended_charts": [
+            "line_chart",
+            "area_chart",
+            "metrics_table",
+            "pie_chart",
+            "raw_data_table",
+        ],
+        "line_chart": {
+            "title": "Portfolio Performance",
+            "data_field": "timeseries",
+            "x": "date",
+            "y": ["value", "benchmark"],
+            "description": "Compare portfolio value vs benchmark over time",
+        },
+        "area_chart": {
+            "title": "Drawdown",
+            "data_field": "timeseries",
+            "x": "date",
+            "y": "drawdown",
+            "description": "Show drawdown as RED area below 0 - MUST be visible",
+        },
+        "metrics_table": {
+            "title": "Key Metrics",
+            "fields": [
+                {"key": "sharpe_ratio", "format": "decimal", "label": "Sharpe Ratio"},
+                {"key": "cagr", "format": "percent", "label": "CAGR"},
+                {"key": "max_drawdown", "format": "percent", "label": "Max Drawdown"},
+                {"key": "volatility", "format": "percent", "label": "Volatility"},
+                {"key": "initial_capital", "format": "currency", "label": "Initial Capital"},
+                {"key": "final_value", "format": "currency", "label": "Final Value"},
+                {"key": "total_fees_paid", "format": "currency", "label": "Total Fees"},
+            ],
+        },
+        "pie_chart": {
+            "title": "Portfolio Allocation",
+            "data_field": "weights",
+            "description": "Show weight allocation by ticker (use input weights)",
+        },
+    }
+
+    # Add bar_chart hint if compare_strategies is enabled
+    if compare_strategies:
+        visualization_hint["recommended_charts"].append("bar_chart")
+        visualization_hint["bar_chart"] = {
+            "title": "Strategy Comparison",
+            "data_field": "comparisons",
+            "metrics": ["sharpe_ratio", "total_return", "max_drawdown"],
+            "description": "Compare performance across different strategies",
+        }
+        # Scale guidance for mixed-scale metrics (radar chart issue)
+        visualization_hint["scale_guidance"] = {
+            "ratio_metrics": {
+                "keys": ["sharpe_ratio", "sortino_ratio", "calmar_ratio"],
+                "typical_range": [-1, 3],
+                "description": "Risk-adjusted ratios. Good: >1, Excellent: >2",
+            },
+            "percent_metrics": {
+                "keys": ["total_return", "cagr", "volatility", "max_drawdown"],
+                "typical_range": [-50, 100],
+                "description": "Percentage values. Display as % with 1-2 decimals",
+            },
+            "radar_chart_warning": (
+                "AVOID radar charts when mixing ratio_metrics with percent_metrics. "
+                "Ratios (0-3 range) get crushed when normalized with percentages (0-100%). "
+                "Instead: use grouped bar charts OR separate radar charts per metric type."
+            ),
+        }
+
+    metrics["_visualization_hint"] = visualization_hint
 
     return metrics

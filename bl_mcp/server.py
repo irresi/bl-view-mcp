@@ -158,185 +158,47 @@ def optimize_portfolio_bl(
     views: Optional[Union[ViewMatrix, dict, str]] = None,
     confidence: Optional[float | list] = None,  # Can be float or list
     investment_style: InvestmentStyle = InvestmentStyle.BALANCED,
-    risk_aversion: Optional[float] = None  # Advanced parameter (last)
+    risk_aversion: Optional[float] = None,  # Advanced parameter
+    sensitivity_range: Optional[list[float]] = None  # Sensitivity analysis
 ) -> dict:
     """
     Optimize portfolio using Black-Litterman model.
-    
-    This is the main optimization tool that combines market equilibrium with your views
-    to produce optimal portfolio weights. It uses the Black-Litterman approach:
-    - Starts with market-implied equilibrium returns (prior)
-    - Incorporates your views with specified confidence (likelihood)
-    - Produces posterior returns and optimal weights
-    
-    Date Range Options (mutually exclusive):
-        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3M", "1W"
-        - Provide 'start_date' for historical data: "2023-01-01"
-        - If both provided, 'start_date' takes precedence
-        - If neither provided, defaults to "1Y" (1 year)
-    
-    Args:
-        tickers: List of ticker symbols (e.g., ["AAPL", "MSFT", "GOOGL"])
-        start_date: Specific start date (YYYY-MM-DD), optional
-        end_date: End date (YYYY-MM-DD), optional
-        period: Relative period ("1Y", "6M", "3M", "1W"), optional (PREFERRED)
-        views: Your investment views in P, Q format (optional)
-              
-              Type: ViewMatrix (Pydantic model) or dict
-              Format: {"P": [...], "Q": [...]}
-              
-              Using Pydantic model (RECOMMENDED for type safety):
-                  ViewMatrix(P=[{"AAPL": 1}], Q=[0.10])
-              
-              Using dict (backward compatible):
-                  {"P": [{"AAPL": 1}], "Q": [0.10]}
-              
-              Examples:
-              1. Absolute view:
-                 {"P": [{"AAPL": 1}], "Q": [0.10]}
-                 - "AAPL will return 10%"
-                 
-              2. Relative view:
-                 {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]}
-                 - "NVDA will outperform AAPL by 20%"
-                 - "엔비디아가 애플보다 20% 높다"
-                 
-              3. Multiple relative views:
-                 {"P": [{"NVDA": 1, "AAPL": -1}, {"NVDA": 1, "MSFT": -1}], "Q": [0.30, 0.30]}
-                 - "NVDA vs AAPL: 30% higher"
-                 - "NVDA vs MSFT: 30% higher"
-                 - "엔비디아가 애플과 마이크로소프트보다 30% 높다"
-                 
-              4. NumPy format (advanced):
-                 {"P": [[1, -1, 0]], "Q": [0.20]}
-              
-              If not provided, uses only market equilibrium
-              
-        confidence: How confident you are in your views (0.0-1.0 or 0-100)
-                   Higher confidence = views have more influence on final weights
-                   
-                   Formats:
-                   - Single float: 0.7 or 70 → same confidence for all views
-                   - List: [0.9, 0.8] → different confidence per view
-                   - None: Defaults to 0.5 (neutral)
-                   
-                   Interpretation guide:
-                   - 0.95 (95%): Very confident (strong conviction)
-                   - 0.85 (85%): Confident (based on solid analysis)
-                   - 0.70 (70%): Fairly confident (reasonable evidence)
-                   - 0.50 (50%): Neutral (weak evidence, default)
-                   - 0.30 (30%): Uncertain (speculative)
-                   
-                   Only used if views are provided
-        investment_style: Investment style for automatic risk aversion adjustment (Enum)
-                         Adjusts market-implied risk aversion based on preference.
-                         
-                         ✅ RECOMMENDED: Use this parameter for risk preference
-                         
-                         - "aggressive": δ × 0.5 (high concentration, high risk)
-                           Natural language: "공격적인 투자", "aggressive style"
-                         - "balanced": δ × 1.0 (market equilibrium, DEFAULT)
-                           Natural language: "균형 잡힌 투자", "balanced approach"
-                         - "conservative": δ × 2.0 (high diversification, low risk)
-                           Natural language: "보수적인 투자", "conservative strategy"
-                         
-                         Auto-calculates from portfolio market data and adjusts by multiplier.
-                         Ignored if risk_aversion is manually specified.
-                         
-        risk_aversion: ⚠️ ADVANCED PARAMETER - DO NOT USE unless you are an expert
-                      
-                      This parameter is for research and backtesting ONLY.
-                      
-                      🚫 LLMs should NEVER set this parameter directly!
-                      ✅ Use investment_style instead (it auto-calculates from market data)
-                      
-                      If provided:
-                      - Overrides market-implied calculation
-                      - Ignores investment_style setting
-                      - You take full responsibility for the value
-                      
-                      Academic reference values (if you must use):
-                      - 2.0: Aggressive (high concentration risk)
-                      - 2.5: Market equilibrium (academic standard)
-                      - 3.0-3.5: Moderate (balanced diversification)
-                      - 4.0+: Conservative (high diversification)
-    
-    Returns:
-        Dictionary containing:
 
-        Portfolio Allocation (WEIGHTS - sum to 100%):
-        - weights: How much to invest in each asset (e.g., {"AAPL": 0.4, "MSFT": 0.6})
-                  These ALWAYS sum to 100%. Use these for actual portfolio construction.
+    ## Quick Reference
+    **Use for**: Portfolio weight allocation
+    **Don't use for**: Stats only → get_asset_stats
 
-        Portfolio Performance (metrics for TOTAL portfolio):
-        - expected_return: Annualized expected return of portfolio (e.g., 0.15 = 15%)
-        - volatility: Annualized volatility/risk (e.g., 0.20 = 20%)
-        - sharpe_ratio: Risk-adjusted return (expected_return / volatility)
+    ## Views Format (CRITICAL)
+    ❌ {"AAPL": 0.10}                    → WRONG (old format)
+    ❌ {"P": {"AAPL": 1}, "Q": [0.10]}   → WRONG (P must be LIST)
+    ✅ {"P": [{"AAPL": 1}], "Q": [0.10]} → Absolute: "AAPL +10%"
+    ✅ {"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.20]} → Relative: "NVDA > AAPL by 20%"
 
-        Individual Asset Expected Returns (NOT weights - do NOT sum to 100%):
-        - prior_returns: Market equilibrium returns BEFORE views.
-                        Per-asset annual return expectations based on market cap and covariance.
-        - posterior_returns: Expected returns AFTER incorporating views.
-                            Compare with prior_returns to see how views shifted expectations.
+    ## Key Parameters
+    - tickers: ["AAPL", "MSFT", "GOOGL"]
+    - period: "1Y" (recommended) or start_date: "2023-01-01"
+    - views: P, Q format above (optional)
+    - confidence: 0.0-1.0 (default 0.5) or list [0.9, 0.7]
+    - investment_style: "aggressive" / "balanced" / "conservative"
+    - sensitivity_range: [0.3, 0.5, 0.9] for confidence sensitivity analysis
+    - risk_aversion: ⚠️ DO NOT USE (use investment_style instead)
 
-        ⚠️ IMPORTANT: prior_returns and posterior_returns are per-asset return expectations
-        (e.g., NVDA: 38%, MSFT: 17%), NOT portfolio weights. They do NOT sum to 100%.
+    ## Returns (Key Fields)
+    - **weights**: Portfolio allocation (sums to 1.0) ← USE THIS FOR INVESTMENT
+    - prior_returns: Per-asset returns BEFORE views (NOT weights, don't sum to 1.0)
+    - posterior_returns: Per-asset returns AFTER views (NOT weights)
+    - expected_return, volatility, sharpe_ratio: Portfolio metrics
 
-        Other:
-        - has_views: Whether views were incorporated (bool)
-        - risk_aversion: The δ parameter used
-        - period: Data period used
+    ## Examples
+    Absolute view: tickers=["AAPL","MSFT"], views={"P":[{"AAPL":1}],"Q":[0.10]}, confidence=0.7
+    Relative view: tickers=["NVDA","AAPL"], views={"P":[{"NVDA":1,"AAPL":-1}],"Q":[0.20]}, confidence=0.8
 
-    Raises:
-        ValueError: Invalid tickers, views format, or insufficient data
-        Exception: Other errors (MCP handles error responses automatically)
-
-        Common error cases (LLM can retry with corrections):
-        - "Ticker 'XYZ' not found": Invalid ticker symbol, remove it and retry
-        - "Insufficient data": Need at least 60 days, try longer period
-        - "Singular matrix": Assets too correlated, add more diverse tickers
-        - "Views validation failed": P/Q dimension mismatch, check lengths
-        - "must use P, Q format": Old dict format used, convert to P, Q
-        - "not found in tickers list": View ticker not in portfolio, add it to tickers
-    
-    Examples:
-        # Example 1: Absolute view
-        Natural language: "AAPL will return 10%"
-        Tool call: 
-            tickers=["AAPL", "MSFT", "GOOGL"], 
-            period="1Y",
-            views={"P": [{"AAPL": 1}], "Q": [0.10]}, 
-            confidence=0.7
-        
-        # Example 2: Relative view (Korean)
-        Natural language: "엔비디아가 애플보다 30% 높다"
-        Tool call:
-            tickers=["NVDA", "AAPL", "MSFT"], 
-            period="5Y",
-            views={"P": [{"NVDA": 1, "AAPL": -1}], "Q": [0.30]},
-            confidence=0.85
-        
-        # Example 3: Aggressive investment style (RECOMMENDED approach)
-        Natural language: "공격적인 투자 성향으로 분석해줘"
-        Tool call:
-            tickers=["AAPL", "MSFT", "GOOGL"],
-            period="1Y",
-            investment_style="aggressive"  # Auto-calculated δ × 0.5
-        
-        # Example 4: Pessimistic market view
-        Natural language: "시장 전망이 안 좋을 때의 결과 보여줘"
-        Tool call:
-            tickers=["AAPL", "MSFT", "GOOGL"],
-            period="1Y",
-            views={"P": [{"AAPL": 1}, {"MSFT": 1}, {"GOOGL": 1}], 
-                   "Q": [-0.05, -0.05, -0.05]},  # Negative returns
-            confidence=0.6
-        
-        # Example 5: Ticker mapping (Korean stocks)
-        Natural language: "삼성전자랑 애플로 포트폴리오 짜줘"
-        Tool call:
-            tickers=["005930.KS", "AAPL"],  # 005930.KS = Samsung Electronics
-            period="1Y"
+    ## Visualization (Investment Safety)
+    Create dashboard from `_visualization_hint`. Required:
+    - Pie: weights (verify sum≈1.0)
+    - Bar: prior vs posterior returns
+    - Table: metrics + raw data
+    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
     """
     # Handle views parameter - can be ViewMatrix, dict, or JSON string
     if views is not None:
@@ -367,14 +229,18 @@ def optimize_portfolio_bl(
         views=views,
         confidence=confidence,
         investment_style=investment_style.value,
-        risk_aversion=risk_aversion
+        risk_aversion=risk_aversion,
+        sensitivity_range=sensitivity_range
     )
 
 
 @mcp.tool()
 def upload_price_data(
     ticker: str,
-    prices: list[dict],
+    prices: Optional[list[dict]] = None,
+    file_path: Optional[str] = None,
+    date_column: str = "date",
+    close_column: str = "close",
     source: str = "user"
 ) -> dict:
     """
@@ -389,10 +255,15 @@ def upload_price_data(
     The uploaded data will be saved as a Parquet file and can be used
     immediately with optimize_portfolio_bl.
 
+    Two input modes (provide EXACTLY ONE):
+    1. Direct data: Use 'prices' parameter for small datasets (<100 rows)
+    2. File path: Use 'file_path' parameter for large datasets or files
+
     Args:
         ticker: Ticker symbol to use (e.g., "005930.KS" for Samsung Electronics)
                 This will be the identifier used in optimize_portfolio_bl
-        prices: List of price data dictionaries, each containing:
+
+        prices: [Mode 1] List of price data dictionaries, each containing:
                 - date: Date string in "YYYY-MM-DD" format
                 - close: Closing price (float)
 
@@ -403,10 +274,11 @@ def upload_price_data(
                     {"date": "2024-01-04", "close": 77800.0}
                 ]
 
-                Requirements:
-                - Minimum 60 data points recommended
-                - Dates should be in chronological order
-                - No missing values allowed
+        file_path: [Mode 2] Absolute path to CSV or Parquet file
+                   Use this for large datasets or when data is already in a file
+
+        date_column: Column name for dates when using file_path (default: "date")
+        close_column: Column name for closing prices when using file_path (default: "close")
 
         source: Source identifier for audit trail (e.g., "user", "pykrx", "external_mcp")
                 Default: "user"
@@ -420,15 +292,28 @@ def upload_price_data(
         - source: Source identifier
 
     Examples:
-        # Korean stock data (삼성전자)
+        # Example 1: Direct data input (small datasets)
         upload_price_data(
             ticker="005930.KS",
             prices=[
                 {"date": "2024-01-02", "close": 78000.0},
                 {"date": "2024-01-03", "close": 78500.0},
-                ...
             ],
             source="pykrx"
+        )
+
+        # Example 2: From CSV file (large datasets)
+        upload_price_data(
+            ticker="KOSPI",
+            file_path="/path/to/kospi_data.csv",
+            date_column="Date",
+            close_column="Close"
+        )
+
+        # Example 3: From Parquet file (from another MCP)
+        upload_price_data(
+            ticker="BTC-KRW",
+            file_path="/tmp/crypto_data.parquet"
         )
 
         # After upload, use in optimization:
@@ -437,58 +322,39 @@ def upload_price_data(
             period="1Y"
         )
     """
-    return data_loader.save_custom_price_data(ticker, prices, source)
-
-
-@mcp.tool()
-def upload_price_data_from_file(
-    ticker: str,
-    file_path: str,
-    date_column: str = "date",
-    close_column: str = "close",
-    source: str = "file"
-) -> dict:
-    """
-    Upload custom price data from a CSV or Parquet file.
-
-    Use this tool when:
-    - External MCP server saved data to a file
-    - User has data in CSV/Parquet format
-    - Batch uploading large datasets
-
-    Args:
-        ticker: Ticker symbol to use (e.g., "CUSTOM_INDEX")
-        file_path: Absolute path to CSV or Parquet file
-        date_column: Column name for dates (default: "date")
-        close_column: Column name for closing prices (default: "close")
-        source: Source identifier (default: "file")
-
-    Returns:
-        Dictionary with upload results:
-        - ticker: The ticker symbol saved
-        - records: Number of records saved
-        - date_range: Start and end dates of the data
-        - file_path: Path to the saved Parquet file
-        - source: Source identifier
-
-    Examples:
-        # From CSV file
-        upload_price_data_from_file(
-            ticker="KOSPI",
-            file_path="/path/to/kospi_data.csv",
-            date_column="Date",
-            close_column="Close"
+    # Validate: exactly one of prices or file_path must be provided
+    if prices is not None and file_path is not None:
+        raise ValueError(
+            "Provide EITHER 'prices' OR 'file_path', not both. "
+            "Use 'prices' for direct data input, 'file_path' for loading from file."
+        )
+    if prices is None and file_path is None:
+        raise ValueError(
+            "Must provide either 'prices' (direct data) or 'file_path' (load from file). "
+            "Example with prices: upload_price_data(ticker='X', prices=[{'date': '2024-01-01', 'close': 100}])"
         )
 
-        # From Parquet file (typically from another MCP)
-        upload_price_data_from_file(
-            ticker="BTC-KRW",
-            file_path="/tmp/crypto_data.parquet"
+    if prices is not None:
+        # Mode 1: Direct data input
+        return data_loader.save_custom_price_data(ticker, prices, source)
+    else:
+        # Mode 2: Load from file
+        return data_loader.load_and_save_from_file(
+            ticker, file_path, date_column, close_column, source
         )
+
+
+class TimeseriesFrequency(str, Enum):
     """
-    return data_loader.load_and_save_from_file(
-        ticker, file_path, date_column, close_column, source
-    )
+    Timeseries sampling frequency for backtest output.
+
+    - daily: All trading days (can be large for long periods)
+    - weekly: Weekly sampling (every Friday)
+    - monthly: Monthly sampling (default, recommended)
+    """
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
 
 
 @mcp.tool()
@@ -501,130 +367,44 @@ def backtest_portfolio(
     strategy: BacktestStrategy = BacktestStrategy.PASSIVE_REBALANCE,
     benchmark: Optional[str] = "SPY",
     initial_capital: float = 10000.0,
-    custom_config: Optional[BacktestConfig] = None
+    custom_config: Optional[BacktestConfig] = None,
+    compare_strategies: bool = False,
+    include_equal_weight: bool = False,
+    timeseries_freq: TimeseriesFrequency = TimeseriesFrequency.MONTHLY
 ) -> dict:
     """
     Backtest a portfolio with specified weights.
 
-    This tool evaluates how a portfolio would have performed historically,
-    including realistic transaction costs and rebalancing.
+    ## Quick Reference
+    **Use after**: optimize_portfolio_bl() to validate performance
+    **Flow**: optimize → backtest(weights=result["weights"])
 
-    RECOMMENDED WORKFLOW:
-    1. First call optimize_portfolio_bl() to get optimal weights
-    2. Then call backtest_portfolio() with those weights to validate performance
+    ## Key Parameters
+    - tickers: ["AAPL", "MSFT", "GOOGL"]
+    - weights: {"AAPL": 0.4, "MSFT": 0.6} from optimize result
+    - period: "3Y" (recommended for backtest)
+    - strategy: "buy_and_hold" / "passive_rebalance" / "risk_managed"
+    - benchmark: "SPY" (default) or None to skip
+    - compare_strategies: true → compare all strategies at once
+    - custom_config: ⚠️ Advanced (rebalance_frequency, fees, stop_loss, etc.)
 
-    Date Range Options (mutually exclusive):
-        - Provide 'period' for recent data (RECOMMENDED): "1Y", "3Y", "5Y"
-        - Provide 'start_date' for historical data: "2020-01-01"
-        - If both provided, 'start_date' takes precedence
-        - If neither provided, defaults to "1Y" (1 year)
+    ## Returns (Key Fields)
+    - total_return, cagr, volatility, sharpe_ratio, max_drawdown
+    - timeseries: [{date, value, benchmark, drawdown}, ...]
+    - drawdown_details: {max_drawdown, start, end, recovery_date}
+    - comparisons: (if compare_strategies=true)
+    - alpha, beta, excess_return: (vs benchmark)
 
-    Args:
-        tickers: List of ticker symbols in the portfolio
-        weights: Target weights from optimize_portfolio_bl output
-                 Example: {"AAPL": 0.4, "MSFT": 0.35, "GOOGL": 0.25}
-                 Weights are automatically normalized to sum to 1.0
-        start_date: Backtest start date (YYYY-MM-DD), optional
-        end_date: Backtest end date (YYYY-MM-DD), optional
-        period: Relative period ("1Y", "3Y", "5Y") - RECOMMENDED
-        strategy: Backtesting strategy preset (Enum)
+    ## Example
+    bl = optimize_portfolio_bl(tickers=["AAPL","MSFT"], period="1Y")
+    bt = backtest_portfolio(tickers=["AAPL","MSFT"], weights=bl["weights"], period="3Y")
 
-                 ✅ RECOMMENDED: Use strategy presets for most use cases
-
-                 - "buy_and_hold": No rebalancing, simple baseline
-                   Natural language: "매입 후 보유", "buy and hold"
-                 - "passive_rebalance": Monthly rebalancing (DEFAULT)
-                   Natural language: "월별 리밸런싱", "passive investing"
-                 - "risk_managed": Monthly rebalancing + 10% stop-loss + 20% MDD limit
-                   Natural language: "손절매 포함", "risk managed"
-
-        benchmark: Benchmark ticker for comparison (default: "SPY")
-                  Set to None to skip benchmark comparison
-        initial_capital: Starting capital (default: 10000)
-        custom_config: ⚠️ ADVANCED - Override strategy preset
-
-                      Only use this for fine-grained control.
-                      Available options:
-                      - rebalance_frequency: "none", "weekly", "monthly", "quarterly", "semi-annual", "annual"
-                      - fees: Transaction fees (0.001 = 0.1%)
-                      - slippage: Slippage cost (0.0005 = 0.05%)
-                      - stop_loss: Stop-loss threshold (0.10 = 10%)
-                      - take_profit: Take-profit threshold (0.20 = 20%)
-                      - trailing_stop: Enable trailing stop-loss (bool)
-                      - max_drawdown_limit: Max drawdown limit (0.20 = 20%)
-
-    Returns:
-        Dictionary containing:
-
-        Performance Metrics:
-        - total_return: Total cumulative return (0.25 = 25%)
-        - cagr: Compound Annual Growth Rate
-        - volatility: Annualized volatility
-        - sharpe_ratio: Risk-adjusted return (higher is better)
-        - sortino_ratio: Downside risk-adjusted return
-        - max_drawdown: Worst peak-to-trough decline (negative)
-        - calmar_ratio: CAGR / |Max Drawdown|
-
-        Value Metrics:
-        - initial_capital: Starting amount
-        - final_value: Ending portfolio value
-
-        Cost Metrics:
-        - total_fees_paid: Total transaction costs
-        - num_rebalances: Number of rebalancing events
-        - turnover: Portfolio turnover
-
-        Benchmark Comparison (if benchmark provided):
-        - benchmark_return: Benchmark total return
-        - excess_return: Portfolio return - Benchmark return
-        - alpha: Jensen's alpha (risk-adjusted excess return)
-        - beta: Portfolio beta vs benchmark
-        - information_ratio: Excess return / Tracking error
-
-        Risk Management:
-        - is_liquidated: Whether portfolio was liquidated
-        - liquidation_reason: Reason for liquidation (if any)
-
-        Tax Info:
-        - holding_periods: Per-ticker holding period info
-          - days: Number of days held
-          - is_long_term: True if held >= 1 year
-
-    Examples:
-        # Example 1: Basic backtest with BL weights
-        # Step 1: Get optimal weights
-        bl_result = optimize_portfolio_bl(
-            tickers=["AAPL", "MSFT", "GOOGL"],
-            period="1Y"
-        )
-        # Step 2: Backtest those weights
-        backtest_portfolio(
-            tickers=["AAPL", "MSFT", "GOOGL"],
-            weights=bl_result["weights"],
-            period="3Y",
-            strategy="passive_rebalance"
-        )
-
-        # Example 2: Risk-managed backtest (Korean)
-        Natural language: "손절매 전략으로 백테스트 해줘"
-        backtest_portfolio(
-            tickers=["NVDA", "AAPL", "MSFT"],
-            weights={"NVDA": 0.5, "AAPL": 0.3, "MSFT": 0.2},
-            period="5Y",
-            strategy="risk_managed"
-        )
-
-        # Example 3: Custom configuration
-        Natural language: "분기별 리밸런싱, 수수료 0.2%로 테스트"
-        backtest_portfolio(
-            tickers=["AAPL", "MSFT"],
-            weights={"AAPL": 0.6, "MSFT": 0.4},
-            period="2Y",
-            custom_config={
-                "rebalance_frequency": "quarterly",
-                "fees": 0.002
-            }
-        )
+    ## Visualization (Investment Safety)
+    Create dashboard from `_visualization_hint`. Required:
+    - Line: timeseries (value + benchmark)
+    - Area: drawdown (red, MUST show negative values clearly)
+    - Table: metrics + raw data
+    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
     """
     # Handle custom_config - can be BacktestConfig or dict
     config_dict = None
@@ -648,7 +428,10 @@ def backtest_portfolio(
         strategy=strategy.value,
         benchmark=benchmark,
         initial_capital=initial_capital,
-        custom_config=config_dict
+        custom_config=config_dict,
+        compare_strategies=compare_strategies,
+        include_equal_weight=include_equal_weight,
+        timeseries_freq=timeseries_freq.value
     )
 
 
@@ -700,73 +483,47 @@ def list_available_tickers(
 
 
 @mcp.tool()
-def calculate_var_egarch(
-    ticker: str,
-    period: str = "3Y",
-    confidence_level: float = 0.95
+def get_asset_stats(
+    tickers: list[str],
+    period: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_var: bool = True
 ) -> dict:
     """
-    EGARCH(1,1) 모델을 사용하여 VaR 95% 계산.
+    Get comprehensive statistics for a list of assets.
 
-    지나치게 낙관적인 View를 검증하기 위해 역사적 데이터 기반으로
-    현실적인 수익률 범위를 제시합니다.
+    ## Quick Reference
+    **Use for**: Check correlations, validate return expectations, get VaR
+    **Don't use for**: Portfolio weights → use optimize_portfolio_bl
+    **Note**: This is OPTIONAL, not required before optimization
 
-    이 도구는 다음과 같은 경우에 유용합니다:
-    - 사용자가 제시한 수익률 예측이 현실적인지 검증
-    - 특정 자산의 역사적 변동성과 리스크 이해
-    - VaR 95% 기준으로 현실적인 수익률 범위 파악
+    ## Key Parameters
+    - tickers: ["AAPL", "MSFT", "GOOGL"]
+    - period: "1Y" (recommended)
+    - include_var: false for faster response (skips EGARCH)
 
-    Args:
-        ticker: 분석 대상 티커 (예: "NVDA", "AAPL")
-        period: 데이터 기간 (기본값: "3Y" - 3개년 일별 데이터)
-                지원 형식: "1Y", "2Y", "3Y", "5Y"
-        confidence_level: VaR 신뢰수준 (기본값: 0.95 = 95%)
-                         0.90 (90%), 0.95 (95%), 0.99 (99%) 등
+    ## Returns
+    - assets: {ticker: {price, annual_return, volatility, sharpe, max_drawdown, var_95, percentile_95}}
+    - correlation_matrix: {ticker: {ticker: correlation}}
+    - covariance_matrix: {ticker: {ticker: covariance}}
 
-    Returns:
-        Dictionary containing:
-        - var_95_annual: 연환산 VaR 95% 값 (예: 0.35 = 35% 수익)
-        - percentile_5_annual: 연환산 5th percentile 수익률
-        - current_volatility: 현재 연환산 변동성
-        - egarch_params: EGARCH(1,1) 모델 파라미터
-        - warning_message: 사용자에게 표시할 경고 메시지
-        - data_points: 사용된 데이터 포인트 수
-        - ticker: 분석 대상 티커
-        - period: 사용된 데이터 기간
+    ## Example
+    stats = get_asset_stats(tickers=["NVDA","AMD"], period="1Y")
+    # → stats["correlation_matrix"]["NVDA"]["AMD"] = 0.75 (highly correlated!)
+    # → stats["assets"]["NVDA"]["percentile_95"] = 0.75 (75% is max realistic expectation)
 
-    Raises:
-        ValueError: 데이터 부족 또는 계산 불가능한 경우
-
-    Examples:
-        # NVDA의 VaR 95% 계산 (3년 데이터)
-        calculate_var_egarch(ticker="NVDA")
-
-        # AAPL의 VaR 95% 계산 (5년 데이터)
-        calculate_var_egarch(ticker="AAPL", period="5Y")
-
-        # TSLA의 VaR 99% 계산
-        calculate_var_egarch(ticker="TSLA", confidence_level=0.99)
-
-    Use Cases:
-        1. View 검증:
-           사용자가 "NVDA 60% 수익 예측"을 제시했을 때,
-           calculate_var_egarch("NVDA")로 VaR 95%가 35%임을 확인하고
-           예측이 지나치게 낙관적임을 알림.
-
-        2. 현실적인 범위 제시:
-           "AAPL의 현실적인 수익률 범위는?"
-           → VaR 95%: 25%, 5th percentile: -10%
-           → "역사적으로 95% 확률로 25% 이하 수익"
-
-        3. 리스크 이해:
-           "TSLA는 얼마나 변동성이 큰가?"
-           → current_volatility: 60%
-           → "연간 변동성 60%로 매우 높은 리스크"
+    ## Visualization (Investment Safety)
+    Create dashboard from `_visualization_hint`. Required:
+    - Heatmap: correlation_matrix (FIXED scale -1 to +1, never auto-scale)
+    - Scatter: risk vs return
+    - Table: metrics + raw data
+    ⚠️ NEVER fabricate data. Include disclaimer: "투자 결정 전 원본 데이터를 확인하세요."
     """
-    from .utils.risk_models import calculate_var_egarch as calc_var
-
-    return calc_var(
-        ticker=ticker,
+    return tools.get_asset_stats(
+        tickers=tickers,
         period=period,
-        confidence_level=confidence_level
+        start_date=start_date,
+        end_date=end_date,
+        include_var=include_var
     )

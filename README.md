@@ -63,6 +63,27 @@ Ask Claude:
 
 > **First run**: S&P 500 data auto-downloads (~30 seconds)
 
+> **Tip**: Want charts or dashboards? Just ask: "Show me a dashboard with the results" or "Create a visualization of the portfolio weights"
+
+### Example Use Cases
+
+Try these prompts with Claude:
+
+**Basic Optimization + Visualization**
+> "Optimize a portfolio with AAPL, MSFT, GOOGL. I think NVDA will outperform AAPL by 20%, confidence 0.8. Show me a dashboard."
+
+**Backtesting with Benchmark**
+> "Backtest my portfolio for 3 years and compare with SPY."
+
+**Strategy Comparison**
+> "Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio."
+
+**Correlation Analysis**
+> "Analyze the correlation between NVDA, AMD, and INTC."
+
+**Sensitivity Analysis**
+> "Create a portfolio with AAPL and MSFT. I expect AAPL to return 15%. Run sensitivity analysis with confidence levels 0.3, 0.5, 0.7, 0.9."
+
 ---
 
 ## Other Installation Methods

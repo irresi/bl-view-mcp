@@ -63,6 +63,8 @@ Ask Claude:
 
 > **First run**: S&P 500 data auto-downloads (~30 seconds)
 
+> **Tip**: Want charts or dashboards? Just ask: "Show me a dashboard with the results" or "Create a visualization of the portfolio weights"
+
 ---
 
 ## Other Installation Methods

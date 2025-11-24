@@ -177,11 +177,16 @@ def optimize_portfolio_bl(
     ## Key Parameters
     - tickers: ["AAPL", "MSFT", "GOOGL"]
     - period: "1Y" (recommended) or start_date: "2023-01-01"
+      Historical data available from 1980-01-01 (varies by ticker)
     - views: P, Q format above (optional)
     - confidence: 0.0-1.0 (default 0.5) or list [0.9, 0.7]
     - investment_style: "aggressive" / "balanced" / "conservative"
     - sensitivity_range: [0.3, 0.5, 0.9] for confidence sensitivity analysis
     - risk_aversion: ⚠️ DO NOT USE (use investment_style instead)
+
+    ## Data Download (if ticker not found)
+    Run: `make download-data` (S&P 500), `make download-nasdaq100`, `make download-etf`
+    Or upload custom data via upload_price_data tool
 
     ## Returns (Key Fields)
     - **weights**: Portfolio allocation (sums to 1.0) ← USE THIS FOR INVESTMENT
@@ -383,10 +388,15 @@ def backtest_portfolio(
     - tickers: ["AAPL", "MSFT", "GOOGL"]
     - weights: {"AAPL": 0.4, "MSFT": 0.6} from optimize result
     - period: "3Y" (recommended for backtest)
+      Historical data available from 1980-01-01 (varies by ticker)
     - strategy: "buy_and_hold" / "passive_rebalance" / "risk_managed"
     - benchmark: "SPY" (default) or None to skip
     - compare_strategies: true → compare all strategies at once
     - custom_config: ⚠️ Advanced (rebalance_frequency, fees, stop_loss, etc.)
+
+    ## Data Download (if ticker not found)
+    Run: `make download-data` (S&P 500), `make download-nasdaq100`, `make download-etf`
+    Or upload custom data via upload_price_data tool
 
     ## Returns (Key Fields)
     - total_return, cagr, volatility, sharpe_ratio, max_drawdown
@@ -501,7 +511,12 @@ def get_asset_stats(
     ## Key Parameters
     - tickers: ["AAPL", "MSFT", "GOOGL"]
     - period: "1Y" (recommended)
+      Historical data available from 1980-01-01 (varies by ticker)
     - include_var: false for faster response (skips EGARCH)
+
+    ## Data Download (if ticker not found)
+    Run: `make download-data` (S&P 500), `make download-nasdaq100`, `make download-etf`
+    Or upload custom data via upload_price_data tool
 
     ## Returns
     - assets: {ticker: {price, annual_return, volatility, sharpe, max_drawdown, var_95, percentile_95}}

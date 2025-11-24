@@ -29,6 +29,12 @@ RUN uv sync
 # 데이터 디렉토리 생성
 RUN mkdir -p /app/data
 
+# S&P 500 데이터 사전 다운로드 (첫 요청 timeout 방지)
+# GitHub Releases에서 다운로드 (빌드 시간 +10초, 런타임 +30초 절약)
+RUN curl -L -o /app/data/snp500.parquet \
+    https://github.com/irresi/bl-view-mcp/releases/download/v0.3.1/snp500.parquet || \
+    echo "Warning: Failed to download S&P 500 data, will auto-download on first request"
+
 # 포트 노출
 EXPOSE 5000
 

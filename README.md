@@ -70,10 +70,12 @@ Ask Claude:
 Try these prompts with Claude:
 
 **Basic Optimization + Visualization**
-> "Optimize a portfolio with AAPL, MSFT, GOOGL. I think NVDA will outperform AAPL by 20%, confidence 0.8. Show me a dashboard."
+> "Optimize a portfolio with AAPL, MSFT, GOOGL, NVDA. I am confident that NVDA will outperform others by 40%. Show me a dashboard."
 
 **Backtesting with Benchmark**
 > "Backtest my portfolio for 3 years and compare with SPY."
+
+> **Note**: Default backtest period is 1 year. All returns (expected return, Q values, backtest results) are **annualized**. For example, `Q: [0.10]` means 10% annual return expectation.
 
 **Strategy Comparison**
 > "Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio."
@@ -196,16 +198,18 @@ backtest_portfolio(
 )
 ```
 
-### `calculate_var_egarch`
+### `get_asset_stats`
 
-Calculate VaR for individual stocks using EGARCH(1,1) model.
+Get asset statistics including VaR, correlation matrix, and covariance matrix.
 
 ```python
-calculate_var_egarch(
-    ticker="NVDA",
-    period="3Y",
-    confidence_level=0.95
+get_asset_stats(
+    tickers=["AAPL", "MSFT", "GOOGL"],
+    period="1Y",
+    include_var=True  # Set False for faster response (skips EGARCH VaR)
 )
+# Returns: assets (price, return, volatility, sharpe, var_95, percentile_95),
+#          correlation_matrix, covariance_matrix
 ```
 
 ### `upload_price_data`
@@ -213,6 +217,7 @@ calculate_var_egarch(
 Upload external data (international stocks, custom assets, etc.).
 
 ```python
+# Direct upload (small data)
 upload_price_data(
     ticker="005930.KS",  # Samsung Electronics
     prices=[
@@ -222,14 +227,9 @@ upload_price_data(
     ],
     source="custom"
 )
-```
 
-### `upload_price_data_from_file`
-
-Load price data from CSV/Parquet files.
-
-```python
-upload_price_data_from_file(
+# Or load from file (large data)
+upload_price_data(
     ticker="CUSTOM_INDEX",
     file_path="/path/to/data.csv",
     date_column="Date",

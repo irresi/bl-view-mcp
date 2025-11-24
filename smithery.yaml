@@ -1,4 +1,8 @@
+runtime: "container"
+build:
+  dockerBuildPath: .
 startCommand:
-  type: stdio
-  commandFunction: |
-    () => ({ command: 'uvx', args: ['bl-view-mcp'] })
+  type: "http"
+  configSchema:
+    type: "object"
+    properties: {}

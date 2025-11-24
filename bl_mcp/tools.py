@@ -581,7 +581,7 @@ def optimize_portfolio_bl(
         perf = (portfolio_return, portfolio_vol, sharpe)
 
     result = {
-        "weights": weights,
+        "weights": weights.to_dict() if hasattr(weights, 'to_dict') else dict(weights),
         "expected_return": perf[0],
         "volatility": perf[1],
         "sharpe_ratio": perf[2],

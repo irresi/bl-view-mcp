@@ -69,13 +69,13 @@ Ask Claude:
 
 Try these prompts with Claude:
 
+> **Note**: Default period is **1 year** for all tools. All returns are **annualized** - when you say "outperform by 40%", it means 40% annual return expectation.
+
 **Basic Optimization + Visualization**
 > "Optimize a portfolio with AAPL, MSFT, GOOGL, NVDA. I am confident that NVDA will outperform others by 40%. Show me a dashboard."
 
 **Backtesting with Benchmark**
 > "Backtest my portfolio for 3 years and compare with SPY."
-
-> **Note**: Default period is **1 year** for all tools. All returns are **annualized** - when you say "outperform by 40%", it means 40% annual return expectation.
 
 **Strategy Comparison**
 > "Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio."

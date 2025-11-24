@@ -1,5 +1,6 @@
 # Black-Litterman Portfolio Optimization MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@irresi/bl-view-mcp)](https://smithery.ai/server/@irresi/bl-view-mcp)
 [![PyPI](https://img.shields.io/pypi/v/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)

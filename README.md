@@ -1,18 +1,21 @@
 # Black-Litterman Portfolio Optimization MCP Server
 
-![Claude Desktop Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image.png)
-![Web UI Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image2.png)
+[![PyPI](https://img.shields.io/pypi/v/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-AI 에이전트를 위한 **Black-Litterman 포트폴리오 최적화** MCP 서버입니다.
+AI 에이전트를 위한 **Black-Litterman 포트폴리오 최적화** MCP 서버
 
-Claude Desktop, Windsurf IDE, Google ADK Agent 등 MCP를 지원하는 모든 AI 에이전트에서 사용할 수 있습니다.
+Claude Desktop, Windsurf IDE, Google ADK 등 MCP 호환 AI에서 사용 가능
+
+![Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image3.png)
 
 ## 주요 기능
 
 - **포트폴리오 최적화** - Black-Litterman 모델 기반 최적 비중 계산
 - **투자자 견해 반영** - "AAPL이 10% 오를 것", "NVDA가 MSFT보다 나을 것" 등
 - **백테스팅** - 과거 데이터로 전략 검증
-- **VaR 경고** - EGARCH 모델로 낙관적 예측 경고
+- **VaR 경고** - EGARCH 모델로 낙관적 예측 자동 경고
 - **다양한 자산** - S&P 500, NASDAQ 100, ETF, 암호화폐, 커스텀 데이터 지원
 
 ---

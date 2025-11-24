@@ -3,6 +3,7 @@
 [![smithery badge](https://smithery.ai/badge/@irresi/bl-view-mcp)](https://smithery.ai/server/@irresi/bl-view-mcp)
 [![PyPI](https://img.shields.io/pypi/v/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/black-litterman-mcp)](https://pypi.org/project/black-litterman-mcp/)
+[![Smithery](https://smithery.ai/badge/@irresi/bl-view-mcp)](https://smithery.ai/server/@irresi/bl-view-mcp)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Black-Litterman portfolio optimization** MCP server for AI agents
@@ -20,9 +21,28 @@ Works with Claude Desktop, Windsurf IDE, Google ADK, and any MCP-compatible AI
 
 ---
 
-## Quick Start (Claude Desktop)
+## Quick Start
 
-### Step 1: Find uvx path
+### Option 1: Smithery (Easiest - No Installation!) 🌟
+
+Install via Smithery in one command:
+
+```bash
+npx @smithery/cli install @irresi/bl-view-mcp --client claude
+```
+
+Or visit [smithery.ai/server/@irresi/bl-view-mcp](https://smithery.ai/server/@irresi/bl-view-mcp) and click:
+- **"Add to Claude Desktop"** - One-click setup
+- **"Add to ChatGPT"** - Direct integration
+- **"Run"** - Test in browser instantly
+
+> **No Python/uv installation needed!** Smithery hosts the server for you.
+
+### Option 2: Local Installation (uvx)
+
+For offline use or development:
+
+#### Step 1: Find uvx path
 
 Run in terminal:
 ```bash
@@ -32,7 +52,7 @@ which uvx
 
 > If uvx is not installed: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 
-### Step 2: Configure Claude Desktop
+#### Step 2: Configure Claude Desktop
 
 Config file location:
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -51,11 +71,13 @@ File content (replace with your uvx path):
 }
 ```
 
-### Step 3: Restart Claude Desktop
+#### Step 3: Restart Claude Desktop
 
 **Cmd+Q** (macOS) or fully quit and restart
 
-### Step 4: Use
+---
+
+## Usage
 
 Ask Claude:
 

@@ -697,3 +697,76 @@ def list_available_tickers(
         list_available_tickers(dataset="custom")
     """
     return data_loader.list_tickers(dataset=dataset, search=search)
+
+
+@mcp.tool()
+def calculate_var_egarch(
+    ticker: str,
+    period: str = "3Y",
+    confidence_level: float = 0.95
+) -> dict:
+    """
+    EGARCH(1,1) 모델을 사용하여 VaR 95% 계산.
+
+    지나치게 낙관적인 View를 검증하기 위해 역사적 데이터 기반으로
+    현실적인 수익률 범위를 제시합니다.
+
+    이 도구는 다음과 같은 경우에 유용합니다:
+    - 사용자가 제시한 수익률 예측이 현실적인지 검증
+    - 특정 자산의 역사적 변동성과 리스크 이해
+    - VaR 95% 기준으로 현실적인 수익률 범위 파악
+
+    Args:
+        ticker: 분석 대상 티커 (예: "NVDA", "AAPL")
+        period: 데이터 기간 (기본값: "3Y" - 3개년 일별 데이터)
+                지원 형식: "1Y", "2Y", "3Y", "5Y"
+        confidence_level: VaR 신뢰수준 (기본값: 0.95 = 95%)
+                         0.90 (90%), 0.95 (95%), 0.99 (99%) 등
+
+    Returns:
+        Dictionary containing:
+        - var_95_annual: 연환산 VaR 95% 값 (예: 0.35 = 35% 수익)
+        - percentile_5_annual: 연환산 5th percentile 수익률
+        - current_volatility: 현재 연환산 변동성
+        - egarch_params: EGARCH(1,1) 모델 파라미터
+        - warning_message: 사용자에게 표시할 경고 메시지
+        - data_points: 사용된 데이터 포인트 수
+        - ticker: 분석 대상 티커
+        - period: 사용된 데이터 기간
+
+    Raises:
+        ValueError: 데이터 부족 또는 계산 불가능한 경우
+
+    Examples:
+        # NVDA의 VaR 95% 계산 (3년 데이터)
+        calculate_var_egarch(ticker="NVDA")
+
+        # AAPL의 VaR 95% 계산 (5년 데이터)
+        calculate_var_egarch(ticker="AAPL", period="5Y")
+
+        # TSLA의 VaR 99% 계산
+        calculate_var_egarch(ticker="TSLA", confidence_level=0.99)
+
+    Use Cases:
+        1. View 검증:
+           사용자가 "NVDA 60% 수익 예측"을 제시했을 때,
+           calculate_var_egarch("NVDA")로 VaR 95%가 35%임을 확인하고
+           예측이 지나치게 낙관적임을 알림.
+
+        2. 현실적인 범위 제시:
+           "AAPL의 현실적인 수익률 범위는?"
+           → VaR 95%: 25%, 5th percentile: -10%
+           → "역사적으로 95% 확률로 25% 이하 수익"
+
+        3. 리스크 이해:
+           "TSLA는 얼마나 변동성이 큰가?"
+           → current_volatility: 60%
+           → "연간 변동성 60%로 매우 높은 리스크"
+    """
+    from .utils.risk_models import calculate_var_egarch as calc_var
+
+    return calc_var(
+        ticker=ticker,
+        period=period,
+        confidence_level=confidence_level
+    )

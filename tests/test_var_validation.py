@@ -156,6 +156,65 @@ def test_optimize_relative_view_extreme():
         print(f"\nNo warnings (may be below 2x VaR)")
 
 
+def test_var_warning_message_content():
+    """Verify warning message contains all required information."""
+
+    print("\n" + "=" * 60)
+    print("TEST: VaR Warning Message Content (INTC 80%)")
+    print("=" * 60)
+
+    result = tools.optimize_portfolio_bl(
+        tickers=["NVDA", "TSLA", "INTC"],
+        period="1Y",
+        views={"P": [{"INTC": 1}], "Q": [0.80]},  # 80% return
+        confidence=0.5
+    )
+
+    print(f"\nPortfolio Weights:")
+    for ticker, weight in result["weights"].items():
+        print(f"  {ticker}: {weight:.2%}")
+
+    if "warnings" in result:
+        print(f"\nWarning found! (Total {len(result['warnings'])} warnings)")
+        for warning in result["warnings"]:
+            print(f"\nWarning message:")
+            print(warning)
+            # Verify message content
+            assert "VaR" in warning, "Should contain 'VaR'"
+            assert "INTC" in warning, "Should contain ticker"
+            assert "95th percentile" in warning, "Should contain '95th percentile'"
+        print(f"\nWarning message verification passed!")
+    else:
+        print(f"\nNo warnings (INTC's 95th percentile may be higher than 80%)")
+
+
+def test_no_warning_for_low_return():
+    """Verify no warning for low return predictions (10%)."""
+
+    print("\n" + "=" * 60)
+    print("TEST: Low Return Prediction (AAPL 10%, no warning expected)")
+    print("=" * 60)
+
+    result = tools.optimize_portfolio_bl(
+        tickers=["AAPL", "MSFT", "GOOGL"],
+        period="1Y",
+        views={"P": [{"AAPL": 1}], "Q": [0.10]},  # 10% return
+        confidence=0.7
+    )
+
+    print(f"\nPortfolio Weights:")
+    for ticker, weight in result["weights"].items():
+        print(f"  {ticker}: {weight:.2%}")
+
+    if "warnings" in result:
+        print(f"\nUnexpected warning:")
+        for warning in result["warnings"]:
+            print(warning)
+        raise AssertionError("Warning should not be issued for 10% return")
+    else:
+        print(f"\nNo warnings (as expected)")
+
+
 if __name__ == "__main__":
     # Run directly without pytest
     print("VaR Validation System Tests Starting\n")
@@ -164,6 +223,8 @@ if __name__ == "__main__":
     test_optimize_normal_view()
     test_optimize_optimistic_view()
     test_optimize_relative_view_extreme()
+    test_var_warning_message_content()
+    test_no_warning_for_low_return()
 
     print("\n" + "=" * 60)
     print("All tests completed!")

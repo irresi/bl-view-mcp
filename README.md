@@ -92,11 +92,11 @@ Generated using the example prompts above with Claude Desktop:
 
 | Optimization | Backtest | Strategy |
 |:---:|:---:|:---:|
-| [![Optimization](docs/screenshots/demo_optimization.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool3.html) |
+| [![Optimization](docs/screenshots/demo_optimization.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool3.html) |
 
 | Correlation | Sensitivity |
 |:---:|:---:|
-| [![Correlation](docs/screenshots/demo_correlation.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool5.html) |
+| [![Correlation](docs/screenshots/demo_correlation.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](https://irresi.github.io/bl-view-mcp/examples/dashboards/tool5.html) |
 
 ---
 

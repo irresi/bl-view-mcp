@@ -17,16 +17,22 @@ For ADK Web UI:
     3. Open browser: http://localhost:8000
 """
 
+import os
 from bl_mcp.server import mcp
 
 
 def main():
     """Main entry point for HTTP mode."""
+    # Smithery uses PORT env var (default 8081), fallback to 5000 for local
+    port = int(os.getenv("PORT", "5000"))
+    # Use 0.0.0.0 for Docker compatibility
+    host = "0.0.0.0"
+
     print("=" * 60)
     print("Black-Litterman MCP Server - HTTP Mode")
     print("=" * 60)
     print()
-    print("🚀 Server starting at: http://localhost:5000/mcp")
+    print(f"🚀 Server starting at: http://{host}:{port}/mcp")
     print()
     print("📝 To test with ADK Web UI:")
     print("   1. Keep this terminal running")
@@ -35,8 +41,8 @@ def main():
     print()
     print("=" * 60)
     print()
-    
-    mcp.run(transport="streamable-http", host="localhost", port=5000)
+
+    mcp.run(transport="streamable-http", host=host, port=port)
 
 
 if __name__ == "__main__":

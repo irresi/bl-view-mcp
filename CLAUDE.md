@@ -73,7 +73,7 @@ git push origin feature-branch
 # -> Create PR on GitHub -> Review -> Merge
 ```
 
-## Current Architecture (2025-11-24)
+## Current Architecture (2025-11-25)
 
 ### MCP Tools (5 tools)
 
@@ -569,7 +569,4 @@ New approach (simple + powerful):
 
 ## Reference
 
-See `memory-bank/` for detailed documentation:
-- `activeContext.md` - Recent changes
-- `systemPatterns.md` - Design patterns
-- `progress.md` - Overall progress
+See `docs/PROGRESS.md` for change history.

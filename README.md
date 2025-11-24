@@ -71,19 +71,19 @@ Try these prompts with Claude:
 > **Note**: Default period is **1 year** for all tools. All returns are **annualized** - when you say "outperform by 40%", it means 40% annual return expectation.
 
 **Basic Optimization + Visualization**
-> "Optimize a portfolio with AAPL, MSFT, GOOGL, NVDA. I am confident that NVDA will outperform others by 40%. Show me a dashboard."
+> Optimize a portfolio with AAPL, MSFT, GOOGL, NVDA. I am confident that NVDA will outperform others by 40%. Show me a dashboard.
 
 **Backtesting with Benchmark**
-> "Backtest the above optimized portfolio for 3 years and compare with SPY."
+> Backtest the above optimized portfolio for 3 years and compare with SPY.
 
 **Strategy Comparison**
-> "Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio."
+> Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio.
 
 **Correlation Analysis**
-> "Analyze the correlation between NVDA, AMD, and INTC."
+> Analyze the correlation between NVDA, AMD, and INTC.
 
 **Sensitivity Analysis**
-> "Create a portfolio with AAPL and MSFT. I expect AAPL to return 15%. Run sensitivity analysis with confidence levels 0.3, 0.5, 0.7, 0.9."
+> Create a portfolio with AAPL and MSFT. I expect AAPL to return 15%. Run sensitivity analysis with confidence levels 0.3, 0.5, 0.7, 0.9.
 
 ### Demo Dashboards
 
@@ -134,17 +134,21 @@ docker build -t bl-mcp .
 docker run -p 5000:5000 -v $(pwd)/data:/app/data bl-mcp
 ```
 
-### Web UI (Testing)
+### Google ADK Web UI
+
+Test with [Google ADK](https://github.com/google/adk-python) (Agent Development Kit):
 
 ```bash
-# Terminal 1: MCP server
-make server-http
+# Terminal 1: Start MCP HTTP server
+make server-http  # localhost:5000
 
-# Terminal 2: Web UI
-make web-ui
+# Terminal 2: Start ADK Web UI
+make web-ui       # localhost:8000
 ```
 
 Open http://localhost:8000 in browser
+
+> Requires `make install` (includes google-adk dependency)
 
 ---
 
@@ -266,10 +270,7 @@ list_available_tickers(dataset="custom")     # Custom data
 
 | Document | Description |
 |----------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | 5-minute start guide |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Developer guide |
-| [TESTING.md](TESTING.md) | Testing guide |
-| [docs/WINDSURF_SETUP.md](docs/WINDSURF_SETUP.md) | Windsurf IDE setup |
+| [docs/TESTING.md](docs/TESTING.md) | Testing guide |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture |
 
 ---
@@ -318,4 +319,3 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Need more help?
 
 - [GitHub Issues](https://github.com/irresi/bl-view-mcp/issues)
-- [QUICKSTART.md](QUICKSTART.md)

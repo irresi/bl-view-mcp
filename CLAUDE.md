@@ -65,8 +65,9 @@ dev = ["pytest", "mypy", "ruff"]        # 개발용
 
 | Tool | 용도 | 비고 |
 |------|------|------|
-| `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구 |
-| `backtest_portfolio` | 포트폴리오 백테스팅 | **NEW** Phase 2 |
+| `optimize_portfolio_bl` | BL 포트폴리오 최적화 | 메인 도구, VaR 경고 포함 |
+| `backtest_portfolio` | 포트폴리오 백테스팅 | Phase 2 |
+| `calculate_var_egarch` | EGARCH 기반 VaR 계산 | **NEW** View 검증용 |
 | `upload_price_data` | 커스텀 가격 데이터 업로드 | 소량 데이터용 |
 | `upload_price_data_from_file` | 파일에서 가격 데이터 로드 | 대량 데이터용 |
 | `list_available_tickers` | 사용 가능 티커 조회 | 검색/필터 지원 |
@@ -213,16 +214,61 @@ custom_config = {
 }
 ```
 
+### VaR 경고 시스템 (NEW)
+
+**설계 철학**: 계산은 중단하지 않고, 정보를 제공하여 사용자가 판단하도록 함
+
+View의 수익률이 40%를 초과하면 EGARCH(1,1) 모델 기반 VaR 분석 수행:
+
+```python
+# 낙관적 View 예시
+result = optimize_portfolio_bl(
+    tickers=["NVDA", "AAPL", "MSFT"],
+    views={"P": [{"NVDA": 1}], "Q": [0.80]},  # 80% 수익 예측
+    confidence=0.7
+)
+
+# 결과에 warnings 필드 포함
+if "warnings" in result:
+    for warning in result["warnings"]:
+        print(warning)
+        # ⚠️ VaR 경고: 귀하의 예측(80%)은 역사적 95th percentile(75.9%)을 초과합니다.
+```
+
+**경고 트리거 조건**:
+- 절대 View: Q > 40% 이고 Q > 95th percentile 수익률
+- 상대 View: Q > 95th percentile × 2
+
+**calculate_var_egarch 도구**:
+
+```python
+# 직접 VaR 확인
+var_result = calculate_var_egarch(
+    ticker="NVDA",
+    period="3Y",
+    confidence_level=0.95
+)
+# Returns:
+# - var_95_annual: 연환산 VaR 95%
+# - percentile_95_annual: 95th percentile 수익률
+# - current_volatility: 현재 변동성
+# - egarch_params: 모델 파라미터
+```
+
 ### Typical Workflow
 
 ```python
-# Step 1: 포트폴리오 최적화
+# Step 1: 포트폴리오 최적화 (VaR 경고 자동 포함)
 bl_result = optimize_portfolio_bl(
     tickers=["AAPL", "MSFT", "GOOGL"],
     period="1Y",
     views={"P": [{"AAPL": 1, "MSFT": -1}], "Q": [0.10]},
     confidence=0.7
 )
+
+# Step 1.5: 경고 확인 (있을 경우)
+if "warnings" in bl_result:
+    print("⚠️ VaR 경고 발생:", bl_result["warnings"])
 
 # Step 2: 최적화 결과로 백테스트
 backtest_result = backtest_portfolio(
@@ -277,15 +323,18 @@ get_market_caps(tickers)
 
 ```
 bl_mcp/
-├── server.py      # MCP interface (1 tool)
+├── server.py      # MCP interface
 ├── tools.py       # Business logic
 └── utils/
     ├── data_loader.py   # Parquet 로드, 자동 다운로드
     ├── validators.py    # 입력 검증, period 파싱
+    ├── risk_models.py   # EGARCH VaR 계산 (NEW)
     └── session.py       # HTTP 세션
 
 tests/
-├── test_simple.py       # 기본 테스트 (6개 시나리오)
+├── test_simple.py           # 기본 테스트
+├── test_var_validation.py   # VaR 검증 테스트 (NEW)
+├── test_var_warning_output.py  # VaR 경고 출력 테스트 (NEW)
 └── ...
 
 memory-bank/             # 상세 문서 (히스토리)
@@ -315,13 +364,20 @@ make web-ui         # localhost:8000에서 ADK Web UI 시작
 
 **참고**: ADK 관련 의존성이 필요합니다 (`make install` 또는 `uv sync --extra agent`)
 
-## Recent Changes (2025-11-23)
+## Recent Changes (2025-11-24)
 
-1. **시가총액 자동 로드**: `market_caps` 파라미터 제거, yfinance에서 자동 다운로드
-2. **Parquet 캐싱**: 한 번 가져온 시가총액은 `data/market_caps.parquet`에 저장
-3. **Ticker 정렬 제거**: 사용자 입력 순서 유지
-4. **Type hint 수정**: `confidence: float | list` (dict 제거)
-5. **커스텀 데이터 지원** (NEW):
+1. **VaR 경고 시스템** (NEW):
+   - EGARCH(1,1) 모델 기반 View 검증
+   - 40% 초과 View 시 자동 VaR 분석
+   - `warnings` 필드로 경고 반환 (계산 중단 안 함)
+   - `calculate_var_egarch` MCP tool 추가
+   - `arch>=6.0.0` 의존성 추가
+
+2. **시가총액 자동 로드**: `market_caps` 파라미터 제거, yfinance에서 자동 다운로드
+3. **Parquet 캐싱**: 한 번 가져온 시가총액은 `data/market_caps.parquet`에 저장
+4. **Ticker 정렬 제거**: 사용자 입력 순서 유지
+5. **Type hint 수정**: `confidence: float | list` (dict 제거)
+6. **커스텀 데이터 지원**:
    - `upload_price_data`: 소량 가격 데이터 직접 업로드
    - `upload_price_data_from_file`: CSV/Parquet 파일에서 로드
    - `list_available_tickers`: 사용 가능 티커 조회

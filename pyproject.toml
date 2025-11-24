@@ -35,7 +35,13 @@ dependencies = [
 ]
 
 [project.scripts]
+# Primary: 패키지 이름과 일치 (uvx black-litterman-mcp 가능)
+black-litterman-mcp = "bl_mcp.__main__:main_stdio"
+# Aliases: 기존 호환성 유지
 bl-view-mcp = "bl_mcp.__main__:main_stdio"
+bl-mcp = "bl_mcp.__main__:main_stdio"
+# HTTP server
+black-litterman-mcp-http = "bl_mcp.__main__:main_http"
 bl-view-mcp-http = "bl_mcp.__main__:main_http"
 
 [project.urls]

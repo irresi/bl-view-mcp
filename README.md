@@ -86,6 +86,8 @@ Try these prompts with Claude:
 
 ### Demo Dashboards
 
+Generated using the example prompts above with Claude Desktop:
+
 <ins>Click images</ins> to view interactive HTML dashboards:
 
 | Optimization | Backtest | Strategy |

@@ -59,6 +59,20 @@ dev = ["pytest", "mypy", "ruff"]        # 개발용
 | `make quickstart` | install + sample + test 한번에 |
 | `make check` | 환경 상태 확인 |
 
+### Git Workflow Rules
+
+> ⚠️ **중요**: 브랜치를 직접 merge하지 말 것. 항상 **Pull Request**를 통해 merge해야 함.
+
+```bash
+# ❌ 하지 말 것
+git checkout main
+git merge feature-branch
+
+# ✅ 올바른 방법
+git push origin feature-branch
+# → GitHub에서 PR 생성 → 리뷰 → Merge
+```
+
 ## Current Architecture (2025-11-23)
 
 ### MCP Tools

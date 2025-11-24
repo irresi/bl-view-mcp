@@ -86,15 +86,15 @@ Try these prompts with Claude:
 
 ### Demo Dashboards
 
-Click images to view interactive HTML dashboards:
+<ins>Click images</ins> to view interactive HTML dashboards:
 
 | Optimization | Backtest | Strategy |
 |:---:|:---:|:---:|
-| [![Optimization](docs/screenshots/demo_optimization.png)](examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](examples/dashboards/tool3.html) |
+| [![Optimization](docs/screenshots/demo_optimization.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool3.html) |
 
 | Correlation | Sensitivity |
 |:---:|:---:|
-| [![Correlation](docs/screenshots/demo_correlation.png)](examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](examples/dashboards/tool5.html) |
+| [![Correlation](docs/screenshots/demo_correlation.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](https://htmlpreview.github.io/?https://github.com/irresi/bl-view-mcp/blob/main/examples/dashboards/tool5.html) |
 
 ---
 

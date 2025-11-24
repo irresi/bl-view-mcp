@@ -5,10 +5,12 @@ This script:
 1. Fetches the current NASDAQ 100 constituents from Wikipedia
 2. Downloads historical data for each ticker
 3. Saves to individual Parquet files
+4. Pre-caches market caps for all tickers (parallel processing)
 
 Usage:
     python scripts/download_nasdaq100.py --start 2020-01-01
     python scripts/download_nasdaq100.py --start 2023-01-01 --limit 50
+    python scripts/download_nasdaq100.py --market-caps-only  # Only update market caps
 """
 
 import argparse
@@ -19,6 +21,8 @@ import time
 
 import pandas as pd
 import yfinance as yf
+
+from common import download_market_caps
 
 warnings.filterwarnings('ignore')
 
@@ -204,8 +208,8 @@ def main():
     )
     parser.add_argument(
         '--start',
-        default='2020-01-01',
-        help='Start date (YYYY-MM-DD), default: 2020-01-01'
+        default='1980-01-01',
+        help='Start date (YYYY-MM-DD), default: 1980-01-01 (maximum historical data)'
     )
     parser.add_argument(
         '--end',
@@ -234,6 +238,22 @@ def main():
         action='store_true',
         help='Save NASDAQ 100 ticker list to CSV'
     )
+    parser.add_argument(
+        '--market-caps-only',
+        action='store_true',
+        help='Only download market caps (skip price data)'
+    )
+    parser.add_argument(
+        '--skip-market-caps',
+        action='store_true',
+        help='Skip market caps download'
+    )
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=10,
+        help='Number of parallel workers for market cap download (default: 10)'
+    )
 
     args = parser.parse_args()
 
@@ -253,6 +273,11 @@ def main():
     if args.limit:
         tickers = tickers[:args.limit]
         print(f"📋 Limited to {len(tickers)} tickers for testing")
+
+    # Market caps only mode
+    if args.market_caps_only:
+        download_market_caps(tickers, output_dir, max_workers=args.workers)
+        return
 
     print(f"\n{'='*60}")
     print(f"Downloading NASDAQ 100 data")
@@ -281,8 +306,9 @@ def main():
         if i < len(tickers):
             time.sleep(args.delay)
 
+    # Summary for price data
     print(f"\n{'='*60}")
-    print(f"Download Complete!")
+    print(f"Price Data Download Complete!")
     print(f"{'='*60}")
     print(f"✅ Success:  {success_count}/{len(tickers)} (downloaded)")
     print(f"⏭️  Skipped:  {skip_count}/{len(tickers)} (already up to date)")
@@ -294,6 +320,11 @@ def main():
             print(f"   - {ticker}")
 
     print(f"\n📁 Data saved to: {output_dir.absolute()}")
+
+    # Download market caps (unless skipped)
+    if not args.skip_market_caps:
+        download_market_caps(tickers, output_dir, max_workers=args.workers)
+
     print(f"{'='*60}\n")
 
 

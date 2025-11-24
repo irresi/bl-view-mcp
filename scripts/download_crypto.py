@@ -312,8 +312,8 @@ def main():
     )
     parser.add_argument(
         '--start',
-        default='2020-01-01',
-        help='Start date (YYYY-MM-DD), default: 2020-01-01'
+        default='1980-01-01',
+        help='Start date (YYYY-MM-DD), default: 1980-01-01 (maximum historical data)'
     )
     parser.add_argument(
         '--end',

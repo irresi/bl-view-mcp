@@ -5,10 +5,12 @@ This script:
 1. Fetches the current S&P 500 constituents from Wikipedia
 2. Downloads historical data for each ticker
 3. Saves to individual Parquet files
+4. Pre-caches market caps for all tickers (parallel processing)
 
 Usage:
     python scripts/download_sp500.py --start 2020-01-01
     python scripts/download_sp500.py --start 2023-01-01 --limit 50
+    python scripts/download_sp500.py --market-caps-only  # Only update market caps
 """
 
 import argparse
@@ -19,6 +21,8 @@ import time
 
 import pandas as pd
 import yfinance as yf
+
+from common import download_market_caps
 
 warnings.filterwarnings('ignore')
 
@@ -274,30 +278,51 @@ def main():
         action='store_true',
         help='Save S&P 500 ticker list to CSV'
     )
-    
+    parser.add_argument(
+        '--market-caps-only',
+        action='store_true',
+        help='Only download market caps (skip price data)'
+    )
+    parser.add_argument(
+        '--skip-market-caps',
+        action='store_true',
+        help='Skip market caps download'
+    )
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=10,
+        help='Number of parallel workers for market cap download (default: 10)'
+    )
+
     args = parser.parse_args()
-    
+
     # Setup
     output_dir = Path(args.output)
     output_dir.mkdir(exist_ok=True)
-    
+
     start_date = args.start
     end_date = args.end or datetime.now().strftime('%Y-%m-%d')
-    
+
     # Get S&P 500 tickers
     tickers, info_df = get_sp500_tickers()
-    
+
     # Save ticker list if requested
     if args.save_list and info_df is not None:
         list_path = output_dir / 'sp500_tickers.csv'
         info_df.to_csv(list_path, index=False)
         print(f"💾 Saved ticker list to {list_path}")
-    
+
     # Apply limit if specified
     if args.limit:
         tickers = tickers[:args.limit]
         print(f"📋 Limited to {len(tickers)} tickers for testing")
-    
+
+    # Market caps only mode
+    if args.market_caps_only:
+        download_market_caps(tickers, output_dir, max_workers=args.workers)
+        return
+
     print(f"\n{'='*60}")
     print(f"Downloading S&P 500 data")
     print(f"{'='*60}")
@@ -305,42 +330,47 @@ def main():
     print(f"Period: {start_date} to {end_date}")
     print(f"Output: {output_dir.absolute()}")
     print(f"{'='*60}\n")
-    
-    # Download
+
+    # Download price data
     success_count = 0
     skip_count = 0
     failed_tickers = []
-    
+
     for i, ticker in enumerate(tickers, 1):
         print(f"[{i:3d}/{len(tickers):3d}] ", end='')
-        
+
         status = download_ticker_data(ticker, args.start, end_date, output_dir)
-        
+
         if status == 'success':
             success_count += 1
         elif status == 'skip':
             skip_count += 1
         else:  # 'failed'
             failed_tickers.append(ticker)
-        
+
         # Rate limiting
         if i < len(tickers):
             time.sleep(args.delay)
-    
-    # Summary
+
+    # Summary for price data
     print(f"\n{'='*60}")
-    print(f"Download Complete!")
+    print(f"Price Data Download Complete!")
     print(f"{'='*60}")
     print(f"✅ Success:  {success_count}/{len(tickers)} (downloaded)")
     print(f"⏭️  Skipped:  {skip_count}/{len(tickers)} (already up to date)")
     print(f"❌ Failed:   {len(failed_tickers)}/{len(tickers)}")
-    
+
     if failed_tickers:
         print(f"\n⚠️  Failed tickers:")
         for ticker in failed_tickers:
             print(f"   - {ticker}")
-    
+
     print(f"\n📁 Data saved to: {output_dir.absolute()}")
+
+    # Download market caps (unless skipped)
+    if not args.skip_market_caps:
+        download_market_caps(tickers, output_dir, max_workers=args.workers)
+
     print(f"{'='*60}\n")
 
 

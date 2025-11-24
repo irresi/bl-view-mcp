@@ -26,8 +26,14 @@ COPY start_http.py start_stdio.py ./
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.3.1
 RUN uv sync
 
-# 데이터 디렉토리 생성
-RUN mkdir -p /app/data
+# 데이터 디렉토리 생성 및 사전 다운로드 (첫 요청 timeout 방지)
+# GitHub Releases에서 data.tar.gz 다운로드 후 압축 해제
+RUN mkdir -p /app/data && \
+    curl -L -o /tmp/data.tar.gz \
+    https://github.com/irresi/bl-view-mcp/releases/download/data-snp500-latest/data.tar.gz && \
+    tar -xzf /tmp/data.tar.gz -C /app && \
+    rm /tmp/data.tar.gz || \
+    echo "Warning: Failed to download data, will auto-download on first request"
 
 # S&P 500 데이터 사전 다운로드 (첫 요청 timeout 방지)
 # GitHub Releases에서 다운로드 (빌드 시간 +10초, 런타임 +30초 절약)

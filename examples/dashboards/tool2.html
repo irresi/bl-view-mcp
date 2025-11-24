@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio Backtest Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: #1a1a24;
+      --bg-card-hover: #22222e;
+      --text-primary: #f0f0f5;
+      --text-secondary: #8888a0;
+      --text-muted: #555566;
+      --accent-portfolio: #22d3ee;
+      --accent-benchmark: #fbbf24;
+      --accent-green: #4ade80;
+      --accent-red: #f87171;
+      --border-subtle: rgba(255,255,255,0.06);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .noise-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0.03;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #22d3ee 0%, #4ade80 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      background: linear-gradient(180deg, #fff 0%, #aaa 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+    }
+
+    .period-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      border-radius: 100px;
+      padding: 10px 20px;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: var(--accent-portfolio);
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+      max-width: 700px;
+      margin: 40px auto 48px;
+    }
+
+    .hero-stat {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 28px;
+      text-align: center;
+      animation: fadeInUp 0.6s ease-out backwards;
+    }
+
+    .hero-stat:nth-child(1) { animation-delay: 0.1s; }
+    .hero-stat:nth-child(2) { animation-delay: 0.2s; }
+
+    .hero-stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 12px;
+    }
+
+    .hero-stat-row {
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .hero-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .hero-stat-value.portfolio { color: var(--accent-portfolio); }
+    .hero-stat-value.benchmark { color: var(--accent-benchmark); }
+    .hero-stat-value.positive { color: var(--accent-green); }
+
+    .hero-stat-sub {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .vs-badge {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+      transition: all 0.3s ease;
+      animation: fadeInUp 0.6s ease-out backwards;
+    }
+
+    .metric-card:hover {
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.4rem;
+      font-weight: 600;
+    }
+
+    .metric-value.positive { color: var(--accent-green); }
+    .metric-value.negative { color: var(--accent-red); }
+    .metric-value.neutral { color: var(--text-primary); }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      padding: 28px;
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out backwards;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 20px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 320px;
+    }
+
+    .chart-container.small {
+      height: 200px;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .hero-stats { grid-template-columns: 1fr; }
+    }
+
+    .strategy-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+
+    .strategy-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .strategy-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .strategy-badge {
+      font-size: 0.65rem;
+      padding: 4px 10px;
+      border-radius: 100px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .strategy-badge.active {
+      background: rgba(34, 211, 238, 0.15);
+      color: var(--accent-portfolio);
+    }
+
+    .strategy-badge.warning {
+      background: rgba(248, 113, 113, 0.15);
+      color: var(--accent-red);
+    }
+
+    .strategy-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .strategy-metric {
+      text-align: center;
+    }
+
+    .strategy-metric-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .strategy-metric-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 12px 14px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(255,255,255,0.02);
+    }
+
+    td {
+      padding: 14px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .disclaimer {
+      text-align: center;
+      padding: 28px 24px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      border-top: 1px solid var(--border-subtle);
+      margin-top: 40px;
+    }
+
+    .drawdown-warning {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(248, 113, 113, 0.1);
+      color: var(--accent-red);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="noise-overlay"></div>
+  
+  <div class="container">
+    <header>
+      <div class="badge">3-Year Backtest Analysis</div>
+      <h1>Portfolio vs SPY</h1>
+      <p class="subtitle">NVDA-weighted tech portfolio with monthly rebalancing</p>
+      <div class="period-badge">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Nov 2022 → Nov 2025 (751 trading days)
+      </div>
+    </header>
+
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-label">Total Return</div>
+        <div class="hero-stat-row">
+          <div>
+            <div class="hero-stat-value portfolio">+422.9%</div>
+            <div class="hero-stat-sub">Portfolio</div>
+          </div>
+          <span class="vs-badge">vs</span>
+          <div>
+            <div class="hero-stat-value benchmark">+70.7%</div>
+            <div class="hero-stat-sub">SPY</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-label">Excess Return (Alpha)</div>
+        <div class="hero-stat-value positive">+352.2%</div>
+        <div class="hero-stat-sub" style="margin-top: 8px;">Outperformed SPY by 5.0x</div>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card" style="animation-delay: 0.1s;">
+        <div class="metric-label">CAGR</div>
+        <div class="metric-value positive">74.34%</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.15s;">
+        <div class="metric-label">Sharpe Ratio</div>
+        <div class="metric-value positive">2.21</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.2s;">
+        <div class="metric-label">Sortino Ratio</div>
+        <div class="metric-value positive">3.50</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.25s;">
+        <div class="metric-label">Max Drawdown</div>
+        <div class="metric-value negative">-29.80%</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.3s;">
+        <div class="metric-label">Volatility</div>
+        <div class="metric-value neutral">32.70%</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.35s;">
+        <div class="metric-label">Calmar Ratio</div>
+        <div class="metric-value positive">2.49</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.4s;">
+        <div class="metric-label">Beta</div>
+        <div class="metric-value neutral">1.62</div>
+      </div>
+      <div class="metric-card" style="animation-delay: 0.45s;">
+        <div class="metric-label">Final Value</div>
+        <div class="metric-value positive">$52,289</div>
+      </div>
+    </div>
+
+    <div class="card" style="animation-delay: 0.3s;">
+      <div class="card-header">
+        <span class="card-title">Portfolio Value Over Time</span>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #22d3ee;"></div>
+            <span>Portfolio</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background: #fbbf24;"></div>
+            <span>SPY Benchmark</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="performanceChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="animation-delay: 0.4s;">
+      <div class="card-header">
+        <span class="card-title">Drawdown Analysis</span>
+        <div class="drawdown-warning">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          Max: -29.80% (Jan–Apr 2025, recovered in 79 days)
+        </div>
+      </div>
+      <div class="chart-container small">
+        <canvas id="drawdownChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="animation-delay: 0.5s;">
+      <div class="card-header">
+        <span class="card-title">Strategy Comparison</span>
+      </div>
+      
+      <div class="strategy-card">
+        <div class="strategy-header">
+          <span class="strategy-name">📊 Passive Rebalance (Monthly)</span>
+          <span class="strategy-badge active">Selected Strategy</span>
+        </div>
+        <div class="strategy-metrics">
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Total Return</div>
+            <div class="strategy-metric-value" style="color: var(--accent-green);">+422.9%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Sharpe</div>
+            <div class="strategy-metric-value">2.21</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Max DD</div>
+            <div class="strategy-metric-value" style="color: var(--accent-red);">-29.80%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Final Value</div>
+            <div class="strategy-metric-value">$52,289</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-header">
+          <span class="strategy-name">💎 Buy & Hold</span>
+          <span class="strategy-badge" style="background: rgba(74, 222, 128, 0.15); color: var(--accent-green);">Best Return</span>
+        </div>
+        <div class="strategy-metrics">
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Total Return</div>
+            <div class="strategy-metric-value" style="color: var(--accent-green);">+553.5%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Sharpe</div>
+            <div class="strategy-metric-value">2.09</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Max DD</div>
+            <div class="strategy-metric-value" style="color: var(--accent-red);">-34.31%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Final Value</div>
+            <div class="strategy-metric-value">$65,348</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="strategy-card">
+        <div class="strategy-header">
+          <span class="strategy-name">🛡️ Risk Managed (10% Stop-Loss)</span>
+          <span class="strategy-badge warning">Liquidated</span>
+        </div>
+        <div class="strategy-metrics">
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Total Return</div>
+            <div class="strategy-metric-value" style="color: var(--accent-red);">-17.44%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Sharpe</div>
+            <div class="strategy-metric-value">-0.67</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Max DD</div>
+            <div class="strategy-metric-value" style="color: var(--accent-red);">-21.61%</div>
+          </div>
+          <div class="strategy-metric">
+            <div class="strategy-metric-label">Final Value</div>
+            <div class="strategy-metric-value">$8,256</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="animation-delay: 0.6s;">
+      <div class="card-header">
+        <span class="card-title">Monthly Timeseries Data</span>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Portfolio</th>
+              <th>SPY</th>
+              <th>Drawdown</th>
+              <th>Excess</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>2022-11</td><td class="mono">$10,304</td><td class="mono">$10,133</td><td class="mono">0.00%</td><td class="mono" style="color: var(--accent-green);">+1.69%</td></tr>
+            <tr><td>2022-12</td><td class="mono">$9,067</td><td class="mono">$9,549</td><td class="mono" style="color: var(--accent-red);">-13.91%</td><td class="mono" style="color: var(--accent-red);">-5.05%</td></tr>
+            <tr><td>2023-01</td><td class="mono">$10,947</td><td class="mono">$10,150</td><td class="mono" style="color: var(--accent-red);">-2.48%</td><td class="mono" style="color: var(--accent-green);">+7.86%</td></tr>
+            <tr><td>2023-06</td><td class="mono">$18,548</td><td class="mono">$11,152</td><td class="mono" style="color: var(--accent-red);">-1.20%</td><td class="mono" style="color: var(--accent-green);">+66.31%</td></tr>
+            <tr><td>2023-12</td><td class="mono">$20,985</td><td class="mono">$12,049</td><td class="mono" style="color: var(--accent-red);">-0.47%</td><td class="mono" style="color: var(--accent-green);">+74.17%</td></tr>
+            <tr><td>2024-06</td><td class="mono">$36,647</td><td class="mono">$13,883</td><td class="mono" style="color: var(--accent-red);">-4.36%</td><td class="mono" style="color: var(--accent-green);">+163.98%</td></tr>
+            <tr><td>2024-12</td><td class="mono">$39,551</td><td class="mono">$15,047</td><td class="mono" style="color: var(--accent-red);">-3.83%</td><td class="mono" style="color: var(--accent-green);">+162.85%</td></tr>
+            <tr><td>2025-03</td><td class="mono">$33,299</td><td class="mono">$14,405</td><td class="mono" style="color: var(--accent-red);">-20.56%</td><td class="mono" style="color: var(--accent-green);">+131.16%</td></tr>
+            <tr><td>2025-06</td><td class="mono">$42,665</td><td class="mono">$15,957</td><td class="mono">0.00%</td><td class="mono" style="color: var(--accent-green);">+167.35%</td></tr>
+            <tr><td>2025-11</td><td class="mono">$52,289</td><td class="mono">$17,068</td><td class="mono" style="color: var(--accent-red);">-7.08%</td><td class="mono" style="color: var(--accent-green);">+206.36%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="disclaimer">
+      <strong>⚠️ Disclaimer:</strong> This visualization is for reference only. Past performance does not guarantee future results.<br>
+      Please verify raw data before making investment decisions. Backtest results include transaction fees (0.1%) and slippage (0.05%).
+    </div>
+  </div>
+
+  <script>
+    Chart.defaults.color = '#8888a0';
+    Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+    // Performance Chart
+    const perfCtx = document.getElementById('performanceChart').getContext('2d');
+    const timeseries = [
+      {date: '2022-11', value: 10304.09, benchmark: 10132.97},
+      {date: '2022-12', value: 9066.98, benchmark: 9549.03},
+      {date: '2023-01', value: 10947.07, benchmark: 10149.54},
+      {date: '2023-02', value: 11855.00, benchmark: 9894.36},
+      {date: '2023-03', value: 13846.29, benchmark: 10261.22},
+      {date: '2023-04', value: 14138.69, benchmark: 10425.14},
+      {date: '2023-05', value: 17219.52, benchmark: 10473.26},
+      {date: '2023-06', value: 18548.01, benchmark: 11151.93},
+      {date: '2023-07', value: 19831.73, benchmark: 11516.97},
+      {date: '2023-08', value: 20229.92, benchmark: 11329.80},
+      {date: '2023-09', value: 18472.49, benchmark: 10792.37},
+      {date: '2023-10', value: 17971.57, benchmark: 10558.08},
+      {date: '2023-11', value: 20196.85, benchmark: 11522.50},
+      {date: '2023-12', value: 20984.77, benchmark: 12048.56},
+      {date: '2024-01', value: 23536.43, benchmark: 12240.46},
+      {date: '2024-02', value: 26841.46, benchmark: 12879.25},
+      {date: '2024-03', value: 28908.57, benchmark: 13300.42},
+      {date: '2024-04', value: 28280.60, benchmark: 12764.15},
+      {date: '2024-05', value: 33269.01, benchmark: 13409.76},
+      {date: '2024-06', value: 36647.28, benchmark: 13882.86},
+      {date: '2024-07', value: 35363.62, benchmark: 14050.97},
+      {date: '2024-08', value: 35644.57, benchmark: 14379.28},
+      {date: '2024-09', value: 36339.16, benchmark: 14681.31},
+      {date: '2024-10', value: 37650.15, benchmark: 14550.30},
+      {date: '2024-11', value: 38963.40, benchmark: 15417.98},
+      {date: '2024-12', value: 39551.35, benchmark: 15047.02},
+      {date: '2025-01', value: 37488.35, benchmark: 15451.13},
+      {date: '2025-02', value: 37144.08, benchmark: 15254.98},
+      {date: '2025-03', value: 33298.50, benchmark: 14404.99},
+      {date: '2025-04', value: 33528.74, benchmark: 14280.09},
+      {date: '2025-05', value: 38446.46, benchmark: 15177.53},
+      {date: '2025-06', value: 42665.25, benchmark: 15957.44},
+      {date: '2025-07', value: 46487.82, benchmark: 16324.96},
+      {date: '2025-08', value: 47561.75, benchmark: 16659.95},
+      {date: '2025-09', value: 51472.31, benchmark: 17253.38},
+      {date: '2025-10', value: 55544.28, benchmark: 17664.66},
+      {date: '2025-11', value: 52288.77, benchmark: 17068.20}
+    ];
+
+    new Chart(perfCtx, {
+      type: 'line',
+      data: {
+        labels: timeseries.map(d => d.date),
+        datasets: [
+          {
+            label: 'Portfolio',
+            data: timeseries.map(d => d.value),
+            borderColor: '#22d3ee',
+            backgroundColor: 'rgba(34, 211, 238, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            borderWidth: 2.5
+          },
+          {
+            label: 'SPY',
+            data: timeseries.map(d => d.benchmark),
+            borderColor: '#fbbf24',
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            borderWidth: 2,
+            borderDash: [5, 3]
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { maxTicksLimit: 12 }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            border: { display: false },
+            ticks: {
+              callback: v => '$' + (v/1000).toFixed(0) + 'k'
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#22222e',
+            titleColor: '#f0f0f5',
+            bodyColor: '#f0f0f5',
+            borderColor: 'rgba(255,255,255,0.1)',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`
+            }
+          }
+        }
+      }
+    });
+
+    // Drawdown Chart
+    const ddCtx = document.getElementById('drawdownChart').getContext('2d');
+    const drawdownData = [
+      {date: '2022-11', dd: 0}, {date: '2022-12', dd: -13.91}, {date: '2023-01', dd: -2.48},
+      {date: '2023-02', dd: -2.14}, {date: '2023-03', dd: 0}, {date: '2023-04', dd: 0},
+      {date: '2023-05', dd: -3.33}, {date: '2023-06', dd: -1.20}, {date: '2023-07', dd: -0.44},
+      {date: '2023-08', dd: 0}, {date: '2023-09', dd: -8.69}, {date: '2023-10', dd: -11.16},
+      {date: '2023-11', dd: -4.21}, {date: '2023-12', dd: -0.47}, {date: '2024-01', dd: -3.23},
+      {date: '2024-02', dd: -0.44}, {date: '2024-03', dd: -2.53}, {date: '2024-04', dd: -4.64},
+      {date: '2024-05', dd: -2.99}, {date: '2024-06', dd: -4.36}, {date: '2024-07', dd: -10.69},
+      {date: '2024-08', dd: -9.98}, {date: '2024-09', dd: -8.23}, {date: '2024-10', dd: -4.92},
+      {date: '2024-11', dd: -3.92}, {date: '2024-12', dd: -3.83}, {date: '2025-01', dd: -10.56},
+      {date: '2025-02', dd: -11.38}, {date: '2025-03', dd: -20.56}, {date: '2025-04', dd: -20.01},
+      {date: '2025-05', dd: -8.27}, {date: '2025-06', dd: 0}, {date: '2025-07', dd: -0.33},
+      {date: '2025-08', dd: -1.96}, {date: '2025-09', dd: -0.02}, {date: '2025-10', dd: -1.29},
+      {date: '2025-11', dd: -7.08}
+    ];
+
+    new Chart(ddCtx, {
+      type: 'line',
+      data: {
+        labels: drawdownData.map(d => d.date),
+        datasets: [{
+          label: 'Drawdown',
+          data: drawdownData.map(d => d.dd),
+          borderColor: '#f87171',
+          backgroundColor: 'rgba(248, 113, 113, 0.3)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { display: false },
+            border: { display: false },
+            ticks: { maxTicksLimit: 12 }
+          },
+          y: {
+            max: 5,
+            min: -35,
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            border: { display: false },
+            ticks: { callback: v => v + '%' }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#22222e',
+            titleColor: '#f0f0f5',
+            bodyColor: '#f0f0f5',
+            borderColor: 'rgba(255,255,255,0.1)',
+            borderWidth: 1,
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: ctx => ` Drawdown: ${ctx.parsed.y.toFixed(2)}%`
+            }
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>

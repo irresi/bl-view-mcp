@@ -8,8 +8,6 @@
 
 Works with Claude Desktop, Windsurf IDE, Google ADK, and any MCP-compatible AI
 
-![Demo](https://raw.githubusercontent.com/irresi/bl-view-mcp/main/docs/image3.png)
-
 ## Features
 
 - **Portfolio Optimization** - Calculate optimal weights using Black-Litterman model
@@ -75,7 +73,7 @@ Try these prompts with Claude:
 > "Optimize a portfolio with AAPL, MSFT, GOOGL, NVDA. I am confident that NVDA will outperform others by 40%. Show me a dashboard."
 
 **Backtesting with Benchmark**
-> "Backtest my portfolio for 3 years and compare with SPY."
+> "Backtest the above optimized portfolio for 3 years and compare with SPY."
 
 **Strategy Comparison**
 > "Compare buy_and_hold, passive_rebalance, and risk_managed strategies for this portfolio."
@@ -85,6 +83,18 @@ Try these prompts with Claude:
 
 **Sensitivity Analysis**
 > "Create a portfolio with AAPL and MSFT. I expect AAPL to return 15%. Run sensitivity analysis with confidence levels 0.3, 0.5, 0.7, 0.9."
+
+### Demo Dashboards
+
+Click images to view interactive HTML dashboards:
+
+| Optimization | Backtest | Strategy |
+|:---:|:---:|:---:|
+| [![Optimization](docs/screenshots/demo_optimization.png)](examples/dashboards/tool1.html) | [![Backtest](docs/screenshots/demo_backtest.png)](examples/dashboards/tool2.html) | [![Strategy](docs/screenshots/demo_strategy.png)](examples/dashboards/tool3.html) |
+
+| Correlation | Sensitivity |
+|:---:|:---:|
+| [![Correlation](docs/screenshots/demo_correlation.png)](examples/dashboards/tool4.html) | [![Sensitivity](docs/screenshots/demo_sensitivity.png)](examples/dashboards/tool5.html) |
 
 ---
 

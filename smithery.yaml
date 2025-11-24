@@ -1,0 +1,4 @@
+startCommand:
+  type: stdio
+  commandFunction: |
+    () => ({ command: 'uvx', args: ['bl-view-mcp'] })

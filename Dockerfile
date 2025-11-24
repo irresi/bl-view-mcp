@@ -21,8 +21,10 @@ COPY scripts ./scripts
 COPY tests ./tests
 COPY start_http.py start_stdio.py ./
 
-# 의존성 설치 (core + crypto for hosted deployment)
-RUN uv sync --extra crypto
+# 의존성 설치 (core only - data comes from GitHub Releases)
+# Set version for setuptools-scm (no .git in Docker)
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.3.1
+RUN uv sync
 
 # 데이터 디렉토리 생성
 RUN mkdir -p /app/data
